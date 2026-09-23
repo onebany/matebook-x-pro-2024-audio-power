@@ -10,7 +10,10 @@ sudo ./install.sh && sudo reboot
 ## Power
 
 - **xe** instead of i915 for the Meteor Lake iGPU (`i915.force_probe=!7d55 xe.force_probe=7d55`): working runtime PM, roughly 8 h on battery instead of 3.
-- **intel-lpmd** with `lp_mode_cpus = 12-21`: P-cores are parked under low load.
+- **intel-lpmd** with Intel's own Meteor Lake profile (`intel_lpmd_config_F6_M170.xml`
+  from the package: workload-type states — idle, battery life, sustained,
+  bursty — with matching EPP/EPB). lpmd reads that per-model file before the
+  generic `intel_lpmd_config.xml`, so the generic one is left as packaged.
 
 ## Audio (Conexant CX11970, 2 tweeters + 4 woofers)
 
@@ -18,7 +21,7 @@ sudo ./install.sh && sudo reboot
 |-------|------|-----|
 | SOF | `sof-hda-generic-ace1-4ch.tplg`, `sof_use_tplg_nhlt=1`, flat EQ/DRC blobs for DMI `VGHH-XX` | all six speakers, no generic high-pass |
 | ALSA | `Speaker` and `Bass Speaker` at 100%, stored in `asound.state` | tweeter/woofer balance |
-| WirePlumber | `api.alsa.soft-mixer = true`, Speaker profile pinned | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
+| WirePlumber | `api.alsa.soft-mixer = true` | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
 | PipeWire | filter-chain **smart filter** in front of the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP compressor → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
 
 The DSP is transparent: GNOME still shows the usual "Speaker" output and its

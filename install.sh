@@ -41,9 +41,15 @@ stage_power() {
         echo "    reboot required for xe"
     fi
 
-    log "intel-lpmd: park P-cores under low load (E-cores 12-21 stay active)"
+    log "intel-lpmd with Intel's Meteor Lake profile (intel_lpmd_config_F6_M170.xml)"
     apt-get install -y --no-install-recommends intel-lpmd >/dev/null
-    install -Dm644 "$CFG/intel_lpmd_config.xml" /etc/intel_lpmd/intel_lpmd_config.xml
+    # lpmd reads the per-CPU-model file before the generic intel_lpmd_config.xml,
+    # so an edited generic file is never used here. Older versions of this repo
+    # overwrote that conffile anyway: put the packaged one back.
+    if [[ "$(dpkg --verify intel-lpmd 2>/dev/null || true)" == *" /etc/intel_lpmd/intel_lpmd_config.xml"* ]]; then
+        rm -f /etc/intel_lpmd/intel_lpmd_config.xml
+        apt-get install -y --reinstall -o Dpkg::Options::=--force-confmiss intel-lpmd >/dev/null
+    fi
     systemctl enable -q intel_lpmd
     systemctl restart intel_lpmd
 }
@@ -68,7 +74,7 @@ stage_audio() {
     amixer -q -c0 sset 'Post Mixer Analog Playback DRC switch' on 2>/dev/null || true
     alsactl store 2>/dev/null || true
 
-    log "WirePlumber: Speaker profile, software mixer"
+    log "WirePlumber: software mixer (hardware Speaker controls stay at 100%)"
     install -Dm644 "$CFG/51-matebook-audio.conf" \
         /etc/wireplumber/wireplumber.conf.d/51-matebook-audio.conf
 
