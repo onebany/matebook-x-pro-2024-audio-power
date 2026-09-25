@@ -1,10 +1,19 @@
 # Huawei MateBook X Pro 2024 — power & audio on Ubuntu
 
+Install (one command), then reboot:
+
 ```bash
-git clone <repo-url> matebook-x-pro-2024-audio-power
-cd matebook-x-pro-2024-audio-power
-sudo ./install.sh && sudo reboot
-./verify.sh --live
+sudo apt install -y git && git clone https://github.com/onebany/matebook-x-pro-2024-audio-power && sudo ./matebook-x-pro-2024-audio-power/install.sh
+```
+
+Check after the reboot: `./matebook-x-pro-2024-audio-power/verify.sh --live`
+
+All three MateBook X Pro 2024 repos ([camera](https://github.com/onebany/matebook-x-pro-2024-camera),
+[fingerprint](https://github.com/onebany/matebook-x-pro-2024-fingerprint),
+[audio-power](https://github.com/onebany/matebook-x-pro-2024-audio-power)) at once, then reboot:
+
+```bash
+sudo apt install -y git && for r in camera fingerprint audio-power; do git clone https://github.com/onebany/matebook-x-pro-2024-$r && sudo ./matebook-x-pro-2024-$r/install.sh || break; done
 ```
 
 ## Power
