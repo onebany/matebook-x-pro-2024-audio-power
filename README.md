@@ -31,22 +31,37 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 | SOF | `sof-hda-generic-ace1-4ch.tplg`, `sof_use_tplg_nhlt=1`, flat EQ/DRC blobs for DMI `VGHH-XX` | all six speakers, no generic high-pass |
 | ALSA | `Speaker` and `Bass Speaker` at 100%, stored in `asound.state` | tweeter/woofer balance |
 | WirePlumber | `api.alsa.soft-mixer = true` | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
-| PipeWire | filter-chain **smart filter** in front of the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → 100 Hz high-pass → LSP compressor → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
+| PipeWire | filter-chain **smart filter** in front of the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP mid/side EQ (100 Hz high-pass, +4 dB side above 200 Hz) → LSP compressor → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
 
 The DSP is transparent: GNOME still shows the usual "Speaker" output and its
 volume slider (software volume, the ALSA controls stay put). WirePlumber
 routes every stream to the speakers through the filter (`wpctl status` lists it
 under *Filters*). Bluetooth or USB outputs are untouched.
 
-Two changes against the EasyEffects preset, measured offline through these
-same plugins (30 s of bass-heavy funk and of acoustic music, 0 dBFS ceiling):
-the preset's x4-slope bass shelf plus the enhancer lift 40–80 Hz by ~30 dB, so
-89% of the output energy sat below 100 Hz where laptop speakers produce next to
-nothing, and the limiter turned everything else down to make room for it. A
-100 Hz high-pass after the enhancer (which has already turned that bass into
-audible harmonics) and +4 dB compressor makeup make the 150 Hz–15 kHz band
-4–6 dB louder with about the same pumping; the curve above 120 Hz is
-unchanged (±0.6 dB).
+The volume slider acts after the DSP, so the compressor and limiter always
+see the full-scale signal. Changes against the EasyEffects preset, each
+measured with `./dsp-check.py`:
+
+- 100 Hz high-pass after the enhancer (which has already turned the sub-bass
+  into audible harmonics), 36 dB/oct, and no 70 Hz shelf. Below 100 Hz the
+  speakers produce next to nothing (Windows: 80 Hz is 19 dB under the mids),
+  yet that energy made the limiter turn the audible band down.
+- Enhancer drive 2 instead of 10: at 10 the harmonics no longer followed the
+  bass (loud bass 6 dB weaker than quiet bass) and smeared distortion up to
+  2.5 kHz.
+- Limiter: lookahead 10 ms so the 20 ms release is real (with 5 ms it is cut
+  to 10 ms and the limiter chops every cycle of a 50 Hz note); ALR stays off,
+  it pumps the mix 8 dB on kicks. Compressor attack 40 ms, makeup +4 dB,
+  120 Hz bell +3 dB: fewer peaks for the limiter, the kick stands out again.
+- Side +4 dB above 200 Hz for width; the bass below stays mono.
+
+At music level the curve above 160 Hz is unchanged (±0.8 dB).
+
+`./dsp-check.py` loads the filter-chain into a private pipewire client
+(virtual sink → chain → virtual source, never the speakers), plays synthetic
+test signals through it and checks width, squash, kick, pumping, distortion,
+peak, sub-bass and level; about 30 s, needs `python3-numpy`. Run it after any
+change to the tuning.
 
 Tuning lives in `configs/60-matebook-speakers-dsp.conf` (values in dB in the
 comments). After editing: `sudo ./install.sh dsp` or copy the file to
