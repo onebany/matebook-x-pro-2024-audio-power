@@ -56,8 +56,10 @@ comments). After editing: `sudo ./install.sh dsp` or copy the file to
 
 `install.sh audio` removes the earlier workarounds if present: the UCM
 `Master`-volume include (dropped by every `alsa-ucm-conf` upgrade anyway), the
-`matebook-speaker-balance` login service and `matebook-audio-fix.sh`, and the
-`easyeffects-matebook` user service. EasyEffects itself is left installed.
+placeholder UCM product config `product_configs/HUAWEI/VGHH-XX.conf`, the
+`intel/sof-ace-tplg` firmware symlink, the `matebook-speaker-balance` login
+service and `matebook-audio-fix.sh`, and the `easyeffects-matebook` user
+service. EasyEffects itself is left installed.
 
 ### Do not
 

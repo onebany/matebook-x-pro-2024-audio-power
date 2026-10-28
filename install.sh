@@ -59,7 +59,6 @@ stage_audio() {
     log "SOF: ace1-4ch topology + NHLT (drives all 6 speakers), flat DSP blobs"
     apt-get install -y --no-install-recommends alsa-utils >/dev/null
     install -m644 "$CFG/alsa-sof-matebook.conf" /etc/modprobe.d/
-    [[ -e /lib/firmware/intel/sof-ace-tplg ]] || ln -s sof-ipc4-tplg /lib/firmware/intel/sof-ace-tplg
     install -Dm644 "$CFG/HUAWEI-VGHH-XX-user.conf" \
         /usr/share/alsa/ucm2/blobs/sof/user_configs/HUAWEI/VGHH-XX.conf
     update-initramfs -u >/dev/null
@@ -68,10 +67,9 @@ stage_audio() {
     # PipeWire never touches these again (api.alsa.soft-mixer below), so the
     # balance set here survives volume changes, logins and WirePlumber restarts.
     for c in Speaker 'Bass Speaker'; do
-        amixer -q -c0 sset "$c" 100% unmute 2>/dev/null \
+        amixer -q -c sofhdadsp sset "$c" 100% unmute 2>/dev/null \
             || echo "    !! no ALSA control '$c' yet — reboot, then: sudo $0 audio"
     done
-    amixer -q -c0 sset 'Post Mixer Analog Playback DRC switch' on 2>/dev/null || true
     alsactl store 2>/dev/null || true
 
     log "WirePlumber: software mixer (hardware Speaker controls stay at 100%)"
@@ -82,8 +80,11 @@ stage_audio() {
     sed -i '/huawei-matebook-speaker/d' /usr/share/alsa/ucm2/Intel/sof-hda-dsp/HiFi.conf 2>/dev/null || true
     rm -f /usr/share/alsa/ucm2/Intel/sof-hda-dsp/huawei-matebook-speaker.conf \
           /usr/share/alsa/ucm2/conf.d/sof-hda-dsp/huawei-vgxx-speaker.conf \
+          /usr/share/alsa/ucm2/blobs/sof/product_configs/HUAWEI/VGHH-XX.conf \
           /etc/systemd/user/matebook-speaker-balance.service \
           /usr/local/bin/matebook-audio-fix.sh
+    # Meteor Lake kernels load topologies from intel/sof-ipc4-tplg only.
+    [[ -L /lib/firmware/intel/sof-ace-tplg ]] && rm /lib/firmware/intel/sof-ace-tplg
     user_systemctl disable --now easyeffects-matebook.service matebook-speaker-balance.service
     if [[ -n $USER_HOME ]]; then
         rm -f "$USER_HOME/.config/systemd/user/easyeffects-matebook.service" \
