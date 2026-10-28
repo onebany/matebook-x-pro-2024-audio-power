@@ -45,9 +45,11 @@ def test_conf(path):
     drop = ("filter.smart", "node.passive", "priority.session", "target.object", "node.dont-fallback")
     body = "\n".join(l for l in body.splitlines() if not any(k in l for k in drop))
     body = body.replace('"MateBook Speakers"', '"dsp-check"')
-    body = body.replace('"matebook_speakers.out"',
-                        '"dsptest.out"  media.class = Audio/Source  priority.session = 0')
-    body = body.replace('"matebook_speakers"', '"dsptest.in"  priority.session = 0')
+    # state.restore-props: WirePlumber would otherwise restore a volume once set on
+    # these nodes (it keys them by media.name) and the chain would run underdriven
+    body = body.replace('"matebook_speakers.out"', '"dsptest.out"  media.class = Audio/Source'
+                        '  priority.session = 0  state.restore-props = false')
+    body = body.replace('"matebook_speakers"', '"dsptest.in"  priority.session = 0  state.restore-props = false')
     return HEADER + body + "]\n"
 
 
@@ -156,7 +158,13 @@ def kick_over_bass(x):
 
 
 def tone_swing(x, f0=2500, win=0.02):
-    """p5..p95 spread of the level of a steady tone, dB."""
+    """p5..p95 spread of the level of a steady tone, dB.
+
+    Band-passed around the tone first: the 20 ms boxcar alone lets the bass leak
+    in, and a linear bass boost then read as distortion (+0.4 dB for +8 dB at
+    150 Hz). Intermodulation near the tone and pumping stay inside the band.
+    """
+    x = band(x, f0 / 1.25, f0 * 1.25)
     z = x * np.exp(-2j * np.pi * f0 * np.arange(len(x)) / FS)
     k = int(win * FS)
     env = 20 * np.log10(np.abs(np.convolve(z, np.ones(k) / k, "valid")) + 1e-12)
