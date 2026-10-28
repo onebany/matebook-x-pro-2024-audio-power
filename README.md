@@ -31,7 +31,7 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 | SOF | `sof-hda-generic-ace1-4ch.tplg`, `sof_use_tplg_nhlt=1`, flat EQ/DRC blobs for DMI `VGHH-XX` | all six speakers, no generic high-pass |
 | ALSA | `Speaker` and `Bass Speaker` at 100%, stored in `asound.state` | tweeter/woofer balance |
 | WirePlumber | `api.alsa.soft-mixer = true` | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
-| PipeWire | filter-chain sink **MateBook Speakers**, the default output, feeding the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP mid/side EQ (100 Hz high-pass, +4 dB side above 200 Hz) → LSP compressor → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
+| PipeWire | filter-chain sink **MateBook Speakers**, the default output, feeding the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP mid/side EQ (100 Hz high-pass, 150 Hz +6 dB, +6 dB side above 200 Hz) → LSP 3-band compressor (250 Hz / 1 kHz) → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
 
 GNOME shows two outputs: **MateBook Speakers** (the DSP, default) and the raw
 **Speaker** sink without it, which stays at 100% (`verify.sh` checks both;
@@ -48,15 +48,31 @@ Changes against the EasyEffects preset, each measured with `./dsp-check.py`:
   speakers produce next to nothing (Windows: 80 Hz is 19 dB under the mids),
   yet that energy made the limiter turn the audible band down.
 - Enhancer drive 2 instead of 10: at 10 the harmonics no longer followed the
-  bass (loud bass 6 dB weaker than quiet bass) and smeared distortion up to
-  2.5 kHz.
+  bass (loud bass 6 dB weaker than quiet bass).
 - Limiter: lookahead 10 ms so the 20 ms release is real (with 5 ms it is cut
   to 10 ms and the limiter chops every cycle of a 50 Hz note); ALR stays off,
-  it pumps the mix 8 dB on kicks. Compressor attack 40 ms, makeup +4 dB,
-  120 Hz bell +3 dB: fewer peaks for the limiter, the kick stands out again.
-- Side +4 dB above 200 Hz for width; the bass below stays mono.
+  it pumps the mix 8 dB on kicks.
+- Body: in the room (`./mic-sweep.py`, below) 200-630 Hz sat 8-13 dB further
+  under 1-2.5 kHz than on Windows. 300 Hz +9 dB wide, 500 Hz +5 dB, 1400 Hz
+  -4 dB and 150 Hz +6 dB (after the enhancer, which keeps its input) bring
+  125 Hz-4 kHz to 3.7 dB rms of the Windows curve at medium volume (was 6.7).
+- 3-band compressor split at 250 Hz and 1 kHz, like Histen's DRC in the
+  Windows driver: the single-band one dipped a steady 2.5 kHz tone 2 dB on
+  every kick. The bass band (ratio 4, 80 ms attack) lets the kick through and
+  holds the sustained bass, so at full volume the woofers get less 80-250 Hz
+  than with any earlier tuning while medium volume gets the full lift.
+  Loudness in the room: +1.7 to +2.9 dB for ordinary masters, -0.7 dB for
+  very loud ones at full volume (the limiter's ceiling now carries the body).
+- Side +6 dB above 200 Hz for width; the bass below stays mono.
 
-At music level the curve above 160 Hz is unchanged (±0.8 dB).
+`./mic-sweep.py` (out loud, ~9 s; pause the music) plays pink noise through
+MateBook Speakers, or with `--raw` straight into the Speaker sink, records the
+built-in mics and prints the response per 1/3 octave next to Notebookcheck's
+Windows measurement of this laptop. Trust 125 Hz-4 kHz only: the mic path is
+flat from 100 Hz up, but the mics in the lid hear the tweeters off-axis. The
+room response with any chain is the `--raw` take plus the chain's own
+transfer function (measured silently); that prediction matched a real take
+within 1.1 dB on average, so tuning can stay silent.
 
 `./dsp-check.py` loads the filter-chain into a private pipewire client
 (virtual sink → chain → virtual source, never the speakers), plays synthetic
