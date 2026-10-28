@@ -20,12 +20,13 @@ for c in Speaker 'Bass Speaker'; do
 done
 
 echo "PipeWire"
+sink="$(wpctl status 2>/dev/null | grep -oE '[0-9]+\. Meteor Lake-P HD Audio Controller Speaker' | grep -oE '^[0-9]+')"
 pw-dump 2>/dev/null | grep -qE '"api.alsa.soft-mixer": *(true|"true")' && ok "soft-mixer on the ALSA card" || fail "soft-mixer not applied (WirePlumber rule; systemctl --user restart wireplumber)"
 wpctl status 2>/dev/null | grep -q 'matebook_speakers' && ok "DSP filter node present" || fail "DSP filter missing (journalctl --user -u pipewire -b | grep -i filter)"
-wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q 'HiFi__Speaker__sink' && ok "default sink is the Speaker (DSP is inserted by WirePlumber)" || fail "default sink is not the Speaker"
+wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q 'node.name = "matebook_speakers"' && ok "default sink is MateBook Speakers (the slider acts before the DSP)" || fail "default sink is not MateBook Speakers (sudo ./install.sh dsp)"
+[[ -n $sink ]] && wpctl get-volume "$sink" | grep -q 'Volume: 1.00' && ok "raw Speaker sink at 100%" || fail "raw Speaker sink not at 100%: it turns the DSP output down after the limiter (wpctl set-volume ${sink:-ID} 1)"
 if [[ "${1:-}" == "--live" ]]; then
     echo "live (2 s tone, muted): stream must reach the ALSA sink through matebook_speakers"
-    sink="$(wpctl status | grep -oE '[0-9]+\. Meteor Lake-P HD Audio Controller Speaker' | grep -oE '^[0-9]+')"
     was_muted=0
     if [[ -n $sink ]]; then
         wpctl get-volume "$sink" | grep -q MUTED && was_muted=1

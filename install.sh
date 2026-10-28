@@ -21,13 +21,14 @@ USER_UID="$([[ -n $USER_NAME ]] && id -u "$USER_NAME" || true)"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 
-# systemctl --user for the invoking desktop user; best-effort (no session = no-op).
-user_systemctl() {
+# A command in the invoking desktop user's session; best-effort (no session = no-op).
+as_user() {
     [[ -n $USER_NAME && -S /run/user/$USER_UID/bus ]] || return 0
     runuser -u "$USER_NAME" -- env XDG_RUNTIME_DIR="/run/user/$USER_UID" \
         DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_UID/bus" \
-        systemctl --user "$@" 2>/dev/null || true
+        "$@" 2>/dev/null || true
 }
+user_systemctl() { as_user systemctl --user "$@"; }
 
 # --------------------------------------------------------------------- power
 stage_power() {
@@ -96,10 +97,27 @@ stage_audio() {
 
 # ----------------------------------------------------------------------- dsp
 stage_dsp() {
-    log "PipeWire speaker DSP (LSP EQ/compressor/limiter, Calf bass enhancer) as a WirePlumber smart filter"
+    log "PipeWire speaker DSP (LSP EQ/compressor/limiter, Calf bass enhancer) as the sink \"MateBook Speakers\""
     apt-get install -y --no-install-recommends lsp-plugins-lv2 calf-plugins >/dev/null
     install -Dm644 "$CFG/60-matebook-speakers-dsp.conf" \
         /etc/pipewire/pipewire.conf.d/60-matebook-speakers-dsp.conf
+}
+
+# After the restart. The volume slider must act before the DSP: MateBook Speakers
+# becomes the default output, and the raw Speaker sink, which comes after the
+# limiter, goes to 100%.
+dsp_default() {
+    [[ -n $USER_NAME && -S /run/user/$USER_UID/bus ]] || return 0
+    local spk=""
+    for _ in {1..20}; do
+        spk="$(as_user wpctl status | grep -oE '[0-9]+\. Meteor Lake-P HD Audio Controller Speaker' | grep -oE '^[0-9]+' || true)"
+        [[ -n $spk ]] && break
+        sleep 0.5
+    done
+    [[ -n $spk ]] || { echo "    !! no Speaker sink in the session yet: run '$0 dsp' again after login"; return 0; }
+    log "Default output: MateBook Speakers; raw Speaker sink at 100%"
+    as_user wpctl set-volume "$spk" 1
+    as_user pw-metadata 0 default.configured.audio.sink '{ "name": "matebook_speakers" }' Spa:String:JSON >/dev/null
 }
 
 main() {
@@ -113,10 +131,12 @@ main() {
     done
     log "Restarting the desktop user's PipeWire session"
     user_systemctl restart pipewire pipewire-pulse wireplumber
+    [[ " ${stages[*]} " == *" dsp "* ]] && dsp_default
     cat <<EOF
 
 Done. After a reboot run (as your user):  $HERE/verify.sh --live
-Output device in GNOME Sound stays "Speaker"; the DSP sits in front of it.
+Output device in GNOME Sound: "MateBook Speakers" (the DSP). "Speaker" next to
+it is the raw sink without the DSP; leave it at 100%.
 EOF
 }
 

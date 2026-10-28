@@ -31,16 +31,17 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 | SOF | `sof-hda-generic-ace1-4ch.tplg`, `sof_use_tplg_nhlt=1`, flat EQ/DRC blobs for DMI `VGHH-XX` | all six speakers, no generic high-pass |
 | ALSA | `Speaker` and `Bass Speaker` at 100%, stored in `asound.state` | tweeter/woofer balance |
 | WirePlumber | `api.alsa.soft-mixer = true` | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
-| PipeWire | filter-chain **smart filter** in front of the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP mid/side EQ (100 Hz high-pass, +4 dB side above 200 Hz) → LSP compressor → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
+| PipeWire | filter-chain sink **MateBook Speakers**, the default output, feeding the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP mid/side EQ (100 Hz high-pass, +4 dB side above 200 Hz) → LSP compressor → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
 
-The DSP is transparent: GNOME still shows the usual "Speaker" output and its
-volume slider (software volume, the ALSA controls stay put). WirePlumber
-routes every stream to the speakers through the filter (`wpctl status` lists it
-under *Filters*). Bluetooth or USB outputs are untouched.
+GNOME shows two outputs: **MateBook Speakers** (the DSP, default) and the raw
+**Speaker** sink without it, which stays at 100% (`verify.sh` checks both;
+`install.sh dsp` sets them). The MateBook Speakers slider scales the input,
+before the DSP, so at low and medium volume the compressor and limiter stay
+idle and only full volume is squeezed. (As a WirePlumber smart filter the
+slider stayed on the Speaker sink, after the limiter, and every volume was
+squeezed alike.) Bluetooth or USB outputs are untouched.
 
-The volume slider acts after the DSP, so the compressor and limiter always
-see the full-scale signal. Changes against the EasyEffects preset, each
-measured with `./dsp-check.py`:
+Changes against the EasyEffects preset, each measured with `./dsp-check.py`:
 
 - 100 Hz high-pass after the enhancer (which has already turned the sub-bass
   into audible harmonics), 36 dB/oct, and no 70 Hz shelf. Below 100 Hz the

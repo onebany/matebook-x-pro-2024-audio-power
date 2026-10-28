@@ -41,8 +41,9 @@ def test_conf(path):
     """The repo filter-chain, renamed and cut loose from the speakers."""
     src = open(path).read()
     body = src[src.index("[", src.index("context.modules")) + 1:src.rindex("]")]
-    body = "\n".join(l for l in body.splitlines()
-                     if "filter.smart" not in l and "node.passive" not in l)
+    # filter.smart: older configs from git would wedge the test into the real speaker path
+    drop = ("filter.smart", "node.passive", "priority.session", "target.object", "node.dont-fallback")
+    body = "\n".join(l for l in body.splitlines() if not any(k in l for k in drop))
     body = body.replace('"MateBook Speakers"', '"dsp-check"')
     body = body.replace('"matebook_speakers.out"',
                         '"dsptest.out"  media.class = Audio/Source  priority.session = 0')
