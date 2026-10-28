@@ -65,14 +65,16 @@ Changes against the EasyEffects preset, each measured with `./dsp-check.py`:
   very loud ones at full volume (the limiter's ceiling now carries the body).
 - Side +6 dB above 200 Hz for width; the bass below stays mono.
 
-`./mic-sweep.py` (out loud, ~9 s; pause the music) plays pink noise through
-MateBook Speakers, or with `--raw` straight into the Speaker sink, records the
-built-in mics and prints the response per 1/3 octave next to Notebookcheck's
-Windows measurement of this laptop. Trust 125 Hz-4 kHz only: the mic path is
-flat from 100 Hz up, but the mics in the lid hear the tweeters off-axis. The
-room response with any chain is the `--raw` take plus the chain's own
-transfer function (measured silently); that prediction matched a real take
-within 1.1 dB on average, so tuning can stay silent.
+`./mic-sweep.py` (out loud, ~9 s; pause the music) plays pink noise at full
+volume through MateBook Speakers, or with `--raw` straight into the Speaker
+sink, records the built-in mics and prints the response per 1/3 octave next to
+Notebookcheck's Windows measurement of this laptop. Trust 125 Hz-4 kHz only:
+the mic path is flat from 100 Hz up, but the mics in the lid hear the tweeters
+off-axis. The room response with any chain is the `--raw` take plus the
+chain's own transfer function (measured silently); that prediction matched
+real takes of two chains within 1.1 and 1.0 dB on average, so tuning can stay
+silent. This tuning, measured: 4.6 dB rms of the Windows curve at full volume
+(the previous one 7.8), body 200-630 Hz -2.6 dB (was -9.5).
 
 `./dsp-check.py` loads the filter-chain into a private pipewire client
 (virtual sink → chain → virtual source, never the speakers), plays synthetic

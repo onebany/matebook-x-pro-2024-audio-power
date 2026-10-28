@@ -4,9 +4,9 @@
   ./mic-sweep.py          # through MateBook Speakers (the DSP), pink noise -20 dBFS RMS
   ./mic-sweep.py --raw    # straight into the Speaker sink, without the DSP
 
-Pause the music first. Mono pink noise goes out and the four DMICs are recorded,
-with the SOF capture DRC and beamformer switched off for the take (restored
-after). Per 1/3 octave: H = Sxy/Sxx (delay-aligned, power-averaged over the mics;
+Pause the music first. Mono pink noise goes out at full volume (the sink is set
+to 1.0 for the take) and the four DMICs are recorded, with the SOF capture DRC
+and beamformer switched off (all restored after). Per 1/3 octave: H = Sxy/Sxx (delay-aligned, power-averaged over the mics;
 distortion and enhancer harmonics do not enter it), relative to 630 Hz-2.5 kHz,
 next to Notebookcheck's Windows measurement of this laptop (max volume, pink).
 
@@ -14,6 +14,7 @@ Trust 125 Hz-4 kHz: the DMIC path is flat from 100 Hz up (its SOF IIR is a
 40 Hz high-pass, +20 dB), the four mics agree within 1.5 dB below 630 Hz.
 Above ~5 kHz the mics in the lid hear the tweeters off-axis and read far low.
 """
+import json
 import signal
 import struct
 import subprocess
@@ -40,6 +41,21 @@ def ctl(name, value=None):
                              capture_output=True, text=True, check=True).stdout
         return out.rsplit("values=", 1)[1].split()[0]
     subprocess.run(["amixer", "-q", "-c", "sofhdadsp", "cset", f"name={name}", value], check=True)
+
+
+def node_id(name):
+    """wpctl 0.5 takes numeric ids only."""
+    for o in json.loads(subprocess.run(["pw-dump"], capture_output=True, text=True, check=True).stdout):
+        if o.get("type") == "PipeWire:Interface:Node" and (o.get("info") or {}).get("props", {}).get("node.name") == name:
+            return str(o["id"])
+    sys.exit(f"no PipeWire node {name}")
+
+
+def volume(node, value=None):
+    """Volume as wpctl and the GNOME slider show it (cubic)."""
+    if value is None:
+        return subprocess.run(["wpctl", "get-volume", node], capture_output=True, text=True, check=True).stdout.split()[1]
+    subprocess.run(["wpctl", "set-volume", node, value], check=True)
 
 
 def pink(n, rms_db):
@@ -73,6 +89,8 @@ def take(sink, x):
     with tempfile.TemporaryDirectory() as d:
         wav(f"{d}/x.wav", np.stack([x, x], 1))
         saved = {c: ctl(c) for c in CTLS}
+        node = node_id(sink)
+        vol = volume(node)
         rec = subprocess.Popen(["pw-record", "--target", MIC, "--format", "f32", "--rate", str(FS),
                                 "--channels", "4", f"{d}/y.wav"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -80,12 +98,16 @@ def take(sink, x):
             time.sleep(0.8)            # PCM open first: UCM may (re)apply its controls on start
             for c in CTLS:
                 ctl(c, "off")
+            # The DSP sink's slider acts before the chain: at 0.5 the compressors would
+            # see -18 dB and the room 18 dB less signal. Windows was measured at max volume.
+            volume(node, "1.0")
             time.sleep(0.4)
             subprocess.run(["pw-play", "--target", sink, f"{d}/x.wav"], check=True)
             time.sleep(0.6)
         finally:
             rec.send_signal(signal.SIGINT)
             rec.wait(5)
+            volume(node, vol)
             for c, v in saved.items():
                 ctl(c, v)
         return wav(f"{d}/y.wav", ch=4)
