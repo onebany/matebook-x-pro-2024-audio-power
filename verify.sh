@@ -13,8 +13,9 @@ systemctl is-active -q intel_lpmd && ok "intel_lpmd active" || fail "intel_lpmd 
 
 echo "SOF / ALSA"
 tplg="$(cat /sys/module/snd_sof_pci/parameters/tplg_filename 2>/dev/null)"
-[[ $tplg == sof-hda-generic-ace1-4ch.tplg ]] && ok "topology $tplg" || fail "topology '${tplg:-?}' (expected ace1-4ch; reboot?)"
+[[ $tplg == sof-hda-generic-ace1-4ch-spk4.tplg ]] && ok "topology $tplg (speakers in 4 channels)" || fail "topology '${tplg:-?}' (expected ace1-4ch-spk4; sudo ./install.sh audio, reboot)"
 [[ -L /usr/share/alsa/ucm2/conf.d/sof-hda-dsp/sof-hda-dsp.conf ]] && ok "UCM conf.d link intact" || fail "UCM conf.d/sof-hda-dsp/sof-hda-dsp.conf is not a symlink (Dummy Output ahead)"
+alsaucm -c hw:sofhdadsp dump text 2>/dev/null | sed -n '/Device.Speaker/,/}/p' | grep -q 'PlaybackChannels 4' && ok "UCM opens Speaker in 4 channels" || fail "UCM Speaker not in 4 channels: the 4-channel PCM fails, Dummy Output (sudo ./install.sh audio)"
 for c in Speaker 'Bass Speaker'; do
     amixer -c sofhdadsp sget "$c" 2>/dev/null | grep -q '\[100%\]' && ok "$c 100%" || fail "$c not at 100% (sudo ./install.sh audio)"
 done
@@ -25,6 +26,7 @@ pw-dump 2>/dev/null | grep -qE '"api.alsa.soft-mixer": *(true|"true")' && ok "so
 wpctl status 2>/dev/null | grep -q 'matebook_speakers' && ok "DSP filter node present" || fail "DSP filter missing (journalctl --user -u pipewire -b | grep -i filter)"
 wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q 'node.name = "matebook_speakers"' && ok "default sink is MateBook Speakers (the slider acts before the DSP)" || fail "default sink is not MateBook Speakers (sudo ./install.sh dsp)"
 [[ -n $sink ]] && wpctl get-volume "$sink" | grep -q 'Volume: 1.00' && ok "raw Speaker sink at 100%" || fail "raw Speaker sink not at 100%: it turns the DSP output down after the limiter (wpctl set-volume ${sink:-ID} 1)"
+[[ -n $sink ]] && wpctl inspect "$sink" | grep -q 'audio.position = "\[ FL, FR, RL, RR \]"' && ok "Speaker sink FL FR (woofers) RL RR (tweeters)" || fail "Speaker sink is not 4 channels FL FR RL RR (wpctl inspect ${sink:-ID})"
 if [[ "${1:-}" == "--live" ]]; then
     echo "live (2 s tone, muted): stream must reach the ALSA sink through matebook_speakers"
     was_muted=0

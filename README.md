@@ -28,8 +28,9 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 
 | Layer | What | Why |
 |-------|------|-----|
-| SOF | `sof-hda-generic-ace1-4ch.tplg`, `sof_use_tplg_nhlt=1`, flat EQ/DRC blobs for DMI `VGHH-XX` | all six speakers, no generic high-pass |
-| ALSA | `Speaker` and `Bass Speaker` at 100%, stored in `asound.state` | tweeter/woofer balance |
+| SOF | `sof-hda-generic-ace1-4ch-spk4.tplg` (stock `ace1-4ch` with the speaker PCM in 4 channels, `topology/build.sh`), `sof_use_tplg_nhlt=1`, flat EQ/DRC blobs for DMI `VGHH-XX` | woofers and tweeters get their own channels, as on Windows; no generic high-pass |
+| UCM | card file `conf.d/sof-hda-dsp/HUAWEI-VGHH_XX-M1010-VGHH_XX_PCB.conf` → a copy of the stock `sof-hda-dsp.conf` whose HiFi verb adds `PlaybackChannels 4` to Speaker | the stock UCM opens Speaker in 2 channels, which the 4-channel PCM refuses (Dummy Output) |
+| ALSA | `Speaker` (DAC 0x23, woofers) and `Bass Speaker` (DAC 0x22, tweeters, despite the name) at 100%, stored in `asound.state` | tweeter/woofer balance |
 | WirePlumber | `api.alsa.soft-mixer = true` | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
 | PipeWire | filter-chain sink **MateBook Speakers**, the default output, feeding the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP mid/side EQ (100 Hz high-pass, 150 Hz +6 dB, +6 dB side above 200 Hz) → LSP 3-band compressor (250 Hz / 1 kHz) → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
 
@@ -95,9 +96,37 @@ placeholder UCM product config `product_configs/HUAWEI/VGHH-XX.conf`, the
 service and `matebook-audio-fix.sh`, and the `easyeffects-matebook` user
 service. EasyEffects itself is left installed.
 
+### Speakers in 4 channels
+
+The Speaker sink is FL FR RL RR: FL FR drive the four woofers (DAC 0x23),
+RL RR the two tweeters (DAC 0x22). Windows sends the same layout and splits
+it in the Huawei SmartPA effect (woofers below 3.2 kHz, tweeters above 3 kHz).
+With the stock 2-channel topology both DACs played the same stereo signal, so
+the woofers carried the whole band. MateBook Speakers still sends stereo with
+`stream.dont-remix`, so for now only FL FR are linked and the tweeters are
+silent. That costs nothing audible yet: in the room (2-channel topology, one
+group switched off at a time) the tweeters played the same full-band signal
+13-24 dB under the woofers above 4 kHz, and both groups together measured
+within 1.5 dB of the woofers alone. Why the tweeters are that quiet with the
+FourSemi FS2119 amps as the BIOS leaves them is open.
+
+The kernel fixes the channels of the HDA link up from the last copier with
+its name, which is the capture one. That is why the capture side of the link
+is 4 channels too: with a 2-channel capture copier, the 4-channel playback ran
+at half speed.
+
+### Roll back to the stock 2-channel topology
+
+`tplg_filename=sof-hda-generic-ace1-4ch.tplg` in
+`/etc/modprobe.d/alsa-sof-matebook.conf`, then
+`sudo rm /usr/share/alsa/ucm2/conf.d/sof-hda-dsp/HUAWEI-VGHH_XX-M1010-VGHH_XX_PCB.conf`,
+`sudo update-initramfs -u` and reboot. Both go together: the 4-channel UCM on
+the stock topology, or the reverse, leaves Dummy Output.
+
 ### Do not
 
 - Never `sed -i` `/usr/share/alsa/ucm2/conf.d/sof-hda-dsp/sof-hda-dsp.conf`: it is a symlink and turning it into a file breaks UCM (Dummy Output).
+- No second `SectionUseCase."HiFi"` next to an include of the stock card file: alsa-lib keeps the stock one and ignores ours.
 
 ## Requirements
 

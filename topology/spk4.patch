@@ -1,0 +1,475 @@
+diff -ru a/cavs-mixin-mixout-hda.conf b/cavs-mixin-mixout-hda.conf
+--- a/cavs-mixin-mixout-hda.conf	2026-09-14 15:38:04.000000000 +0700
++++ b/cavs-mixin-mixout-hda.conf	2026-10-29 18:07:09.797433451 +0700
+@@ -58,6 +58,9 @@
+ 						in_rate			$HDA_ANALOG_PLAYBACK_RATE
+ 						in_bit_depth		32
+ 						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 				Object.Base.output_audio_format [
+@@ -65,6 +68,9 @@
+ 						out_rate		$HDA_ANALOG_PLAYBACK_RATE
+ 						out_bit_depth		32
+ 						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 			}
+@@ -79,6 +85,9 @@
+ 						in_rate			$HDA_ANALOG_PLAYBACK_RATE
+ 						in_bit_depth		32
+ 						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 				Object.Base.output_audio_format [
+@@ -86,6 +95,32 @@
+ 						out_rate		$HDA_ANALOG_PLAYBACK_RATE
+ 						out_bit_depth		32
+ 						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++			}
++			# MateBook X Pro 2024: 4 channels to the codec, FL/FR woofers, RL/RR tweeters
++			Object.Widget.mixout.1 {
++				Object.Base.input_audio_format [
++					{
++						in_rate			$HDA_ANALOG_PLAYBACK_RATE
++						in_bit_depth		32
++						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++				Object.Base.output_audio_format [
++					{
++						out_rate		$HDA_ANALOG_PLAYBACK_RATE
++						out_bit_depth		32
++						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 			}
+@@ -93,11 +128,51 @@
+ 				Object.Control.bytes."1" {
+ 					name 'Post Mixer $ANALOG_PLAYBACK_PCM IIR Eq bytes'
+ 				}
++				Object.Base.input_audio_format [
++					{
++						in_rate			$HDA_ANALOG_PLAYBACK_RATE
++						in_bit_depth		32
++						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++				Object.Base.output_audio_format [
++					{
++						out_rate		$HDA_ANALOG_PLAYBACK_RATE
++						out_bit_depth		32
++						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
+ 			}
+ 			Object.Widget.eqfir.1 {
+ 				Object.Control.bytes."1" {
+ 					name 'Post Mixer $ANALOG_PLAYBACK_PCM FIR Eq bytes'
+ 				}
++				Object.Base.input_audio_format [
++					{
++						in_rate			$HDA_ANALOG_PLAYBACK_RATE
++						in_bit_depth		32
++						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++				Object.Base.output_audio_format [
++					{
++						out_rate		$HDA_ANALOG_PLAYBACK_RATE
++						out_bit_depth		32
++						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
+ 			}
+ 			Object.Widget.drc.1 {
+ 				Object.Control {
+@@ -108,6 +183,26 @@
+ 						name 'Post Mixer $ANALOG_PLAYBACK_PCM DRC switch'
+ 					}
+ 				}
++				Object.Base.input_audio_format [
++					{
++						in_rate			$HDA_ANALOG_PLAYBACK_RATE
++						in_bit_depth		32
++						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++				Object.Base.output_audio_format [
++					{
++						out_rate		$HDA_ANALOG_PLAYBACK_RATE
++						out_bit_depth		32
++						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
+ 			}
+ 		}
+ 	]
+@@ -126,16 +221,25 @@
+ 						in_rate			$HDA_ANALOG_PLAYBACK_RATE
+ 						in_bit_depth		16
+ 						in_valid_bit_depth	16
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 					{
+ 						in_rate			$HDA_ANALOG_PLAYBACK_RATE
+ 						in_bit_depth		32
+ 						in_valid_bit_depth	24
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 					{
+ 						in_rate			$HDA_ANALOG_PLAYBACK_RATE
+ 						in_bit_depth		32
+ 						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 				Object.Base.output_audio_format [
+@@ -143,6 +247,9 @@
+ 						out_rate		$HDA_ANALOG_PLAYBACK_RATE
+ 						out_bit_depth		32
+ 						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 			}
+@@ -167,6 +274,48 @@
+ 						}
+ 					]
+ 				}
++				Object.Base.input_audio_format [
++					{
++						in_rate			$HDA_ANALOG_PLAYBACK_RATE
++						in_bit_depth		32
++						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++				Object.Base.output_audio_format [
++					{
++						out_rate		$HDA_ANALOG_PLAYBACK_RATE
++						out_bit_depth		32
++						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++			}
++			Object.Widget.mixin.1 {
++				Object.Base.input_audio_format [
++					{
++						in_rate			$HDA_ANALOG_PLAYBACK_RATE
++						in_bit_depth		32
++						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
++				Object.Base.output_audio_format [
++					{
++						out_rate		$HDA_ANALOG_PLAYBACK_RATE
++						out_bit_depth		32
++						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
++					}
++				]
+ 			}
+ 		}
+ 	]
+@@ -184,6 +333,9 @@
+ 						in_rate			$HDA_ANALOG_CAPTURE_RATE
+ 						in_bit_depth		32
+ 						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 				Object.Base.output_audio_format [
+@@ -191,16 +343,25 @@
+ 						out_rate		$HDA_ANALOG_CAPTURE_RATE
+ 						out_bit_depth		16
+ 						out_valid_bit_depth	16
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 					{
+ 						out_rate		$HDA_ANALOG_CAPTURE_RATE
+ 						out_bit_depth		32
+ 						out_valid_bit_depth	24
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 					{
+ 						out_rate		$HDA_ANALOG_CAPTURE_RATE
+ 						out_bit_depth		32
+ 						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 			}
+@@ -225,6 +386,9 @@
+ 						in_rate			$HDA_ANALOG_CAPTURE_RATE
+ 						in_bit_depth		32
+ 						in_valid_bit_depth	32
++						in_channels		4
++						in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 				Object.Base.output_audio_format [
+@@ -232,6 +396,9 @@
+ 						out_rate		$HDA_ANALOG_CAPTURE_RATE
+ 						out_bit_depth		32
+ 						out_valid_bit_depth	32
++						out_channels		4
++						out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++						out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 					}
+ 				]
+ 			}
+@@ -247,6 +414,9 @@
+                                                 in_rate			$HDA_ANALOG_CAPTURE_RATE
+                                                 in_bit_depth		32
+                                                 in_valid_bit_depth	32
++                                                in_channels		4
++                                                in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++                                                in_ch_map		$CHANNEL_MAP_3_POINT_1
+                                         }
+                                 ]
+                                 Object.Base.output_audio_format [
+@@ -254,6 +424,9 @@
+                                                 out_rate		$HDA_ANALOG_CAPTURE_RATE
+                                                 out_bit_depth		32
+                                                 out_valid_bit_depth	32
++                                                out_channels		4
++                                                out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++                                                out_ch_map		$CHANNEL_MAP_3_POINT_1
+                                         }
+                                 ]
+                         }
+@@ -266,6 +439,9 @@
+                                                 in_rate			$HDA_ANALOG_CAPTURE_RATE
+                                                 in_bit_depth		32
+                                                 in_valid_bit_depth	32
++                                                in_channels		4
++                                                in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++                                                in_ch_map		$CHANNEL_MAP_3_POINT_1
+                                         }
+                                 ]
+                                 Object.Base.output_audio_format [
+@@ -273,6 +449,9 @@
+                                                 out_rate		$HDA_ANALOG_CAPTURE_RATE
+                                                 out_bit_depth		32
+                                                 out_valid_bit_depth	32
++                                                out_channels		4
++                                                out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++                                                out_ch_map		$CHANNEL_MAP_3_POINT_1
+                                         }
+                                 ]
+                         }
+@@ -377,6 +556,8 @@
+ 			formats 'S32_LE,S24_LE,S16_LE'
+ 			rate_min $HDA_ANALOG_PLAYBACK_RATE
+ 			rate_max $HDA_ANALOG_PLAYBACK_RATE
++			channels_min 4
++			channels_max 4
+ 		}
+ 		Object.PCM.pcm_caps.2 {
+ 			direction	"capture"
+@@ -384,6 +565,8 @@
+ 			formats 'S32_LE,S24_LE,S16_LE'
+ 			rate_min $HDA_ANALOG_CAPTURE_RATE
+ 			rate_max $HDA_ANALOG_CAPTURE_RATE
++			channels_min 4
++			channels_max 4
+ 		}
+ 		direction duplex
+ 	}
+diff -ru a/platform/intel/deep-buffer.conf b/platform/intel/deep-buffer.conf
+--- a/platform/intel/deep-buffer.conf	2026-09-14 15:38:04.000000000 +0700
++++ b/platform/intel/deep-buffer.conf	2026-10-29 17:46:04.498480009 +0700
+@@ -18,27 +18,42 @@
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		16
+ 							in_valid_bit_depth	16
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 						}
+ 						{
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		32
+ 							in_valid_bit_depth	24
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 						}
+ 						{
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		32
+ 							in_valid_bit_depth	32
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 						}
+ 						{
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		32
+ 							in_valid_bit_depth	32
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 							in_sample_type		$SAMPLE_TYPE_FLOAT
+ 						}
+ 						{
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		8
+ 							in_valid_bit_depth	8
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 							in_sample_type		$SAMPLE_TYPE_UNSIGNED_INTEGER
+ 						}
+ 					]
+@@ -50,16 +65,25 @@
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		16
+ 							in_valid_bit_depth	16
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 						}
+ 						{
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		32
+ 							in_valid_bit_depth	24
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 						}
+ 						{
+ 							in_rate			$DEEP_BUF_JACK_RATE
+ 							in_bit_depth		32
+ 							in_valid_bit_depth	32
++							in_channels		4
++							in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++							in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 						}
+ 					]
+ 				}
+@@ -69,6 +93,9 @@
+ 					out_rate		$DEEP_BUF_JACK_RATE
+ 					out_bit_depth		32
+ 					out_valid_bit_depth	32
++					out_channels		4
++					out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++					out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 				}
+ 			]
+ 		}
+@@ -82,6 +109,9 @@
+ 					in_rate			$DEEP_BUF_JACK_RATE
+ 					in_bit_depth		32
+ 					in_valid_bit_depth	32
++					in_channels		4
++					in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++					in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 				}
+ 			]
+ 			Object.Base.output_audio_format [
+@@ -89,6 +119,9 @@
+ 					out_rate		$DEEP_BUF_JACK_RATE
+ 					out_bit_depth		32
+ 					out_valid_bit_depth	32
++					out_channels		4
++					out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++					out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 				}
+ 			]
+ 		}
+@@ -98,6 +131,9 @@
+ 					in_rate			$DEEP_BUF_JACK_RATE
+ 					in_bit_depth            32
+ 					in_valid_bit_depth      32
++					in_channels		4
++					in_ch_cfg		$CHANNEL_CONFIG_QUATRO
++					in_ch_map		$CHANNEL_MAP_3_POINT_1
+ 				}
+ 			]
+ 			Object.Base.output_audio_format [
+@@ -105,6 +141,9 @@
+ 					out_rate		$DEEP_BUF_JACK_RATE
+ 					out_bit_depth		32
+ 					out_valid_bit_depth	32
++					out_channels		4
++					out_ch_cfg		$CHANNEL_CONFIG_QUATRO
++					out_ch_map		$CHANNEL_MAP_3_POINT_1
+ 				}
+ 			]
+ 		}
+@@ -127,6 +166,8 @@
+ 
+ 		Object.PCM.pcm_caps.1 {
+ 			name $DEEP_BUFFER_PCM_NAME
++			channels_min 4
++			channels_max 4
+ 			IncludeByKey.PCM_FORMAT_ALL {
+ 				"true" {
+ 					formats 'S16_LE,S24_LE,S32_LE,U8,FLOAT_LE'

@@ -57,11 +57,25 @@ stage_power() {
 
 # --------------------------------------------------------------------- audio
 stage_audio() {
-    log "SOF: ace1-4ch topology + NHLT (drives all 6 speakers), flat DSP blobs"
+    log "SOF: speakers in 4 channels (woofers FL FR, tweeters RL RR) + NHLT, flat DSP blobs"
     apt-get install -y --no-install-recommends alsa-utils >/dev/null
+    install -Dm644 "$CFG/sof-hda-generic-ace1-4ch-spk4.tplg" \
+        /lib/firmware/updates/intel/sof-ipc4-tplg/sof-hda-generic-ace1-4ch-spk4.tplg
     install -m644 "$CFG/alsa-sof-matebook.conf" /etc/modprobe.d/
     install -Dm644 "$CFG/HUAWEI-VGHH-XX-user.conf" \
         /usr/share/alsa/ucm2/blobs/sof/user_configs/HUAWEI/VGHH-XX.conf
+    # UCM opens Speaker in 2 channels, which the 4-channel PCM refuses (no HiFi profile, Dummy Output).
+    # alsa-lib takes conf.d/<driver>/<card long name>.conf before the stock <driver>.conf, and the first
+    # SectionUseCase wins, so the card file is the stock one with only its HiFi verb file swapped.
+    # Regenerated on every run: after an alsa-ucm-conf upgrade re-run this stage. Stock files stay as packaged.
+    local ucm=/usr/share/alsa/ucm2/Intel/sof-hda-dsp
+    install -m644 "$CFG/ucm-HiFi-matebook-x-pro-2024.conf" "$ucm/HiFi-matebook-x-pro-2024.conf"
+    sed 's|File "/Intel/sof-hda-dsp/HiFi.conf"|File "/Intel/sof-hda-dsp/HiFi-matebook-x-pro-2024.conf"|' \
+        "$ucm/sof-hda-dsp.conf" > "$ucm/matebook-x-pro-2024.conf"
+    grep -q HiFi-matebook-x-pro-2024 "$ucm/matebook-x-pro-2024.conf" \
+        || { echo "no HiFi verb line in $ucm/sof-hda-dsp.conf (alsa-ucm-conf changed?)" >&2; exit 1; }
+    ln -sfn ../../Intel/sof-hda-dsp/matebook-x-pro-2024.conf \
+        /usr/share/alsa/ucm2/conf.d/sof-hda-dsp/HUAWEI-VGHH_XX-M1010-VGHH_XX_PCB.conf
     update-initramfs -u >/dev/null
 
     log "ALSA: tweeters and woofers at 100%, stored in asound.state"
