@@ -2,11 +2,12 @@
 #
 # Huawei MateBook X Pro 2024 on Ubuntu 26.04:
 #   power  — Intel xe driver for the Meteor Lake iGPU, intel-lpmd
-#   audio  — SOF 6-speaker topology, fixed tweeter/woofer balance, WirePlumber rule
-#   dsp    — PipeWire filter-chain sink "MateBook Speakers" (EQ, bass, comp, limiter)
+#   audio  — SOF topology with the speakers in 4 channels, UCM, ALSA levels, WirePlumber rule
+#   amps   — the FS2119 speaker amps as Windows plays them, at boot and after every resume
+#   dsp    — PipeWire filter-chain sink "MateBook Speakers" (Windows' Histen + SmartPA sound)
 #
 #   sudo ./install.sh              # everything
-#   sudo ./install.sh audio dsp    # any subset of: power audio dsp
+#   sudo ./install.sh amps dsp     # any subset of: power audio amps dsp
 #
 # Re-runnable. Reboot once after the first run (GRUB + SOF modprobe options).
 set -euo pipefail
@@ -109,17 +110,28 @@ stage_audio() {
     user_systemctl daemon-reload
 }
 
+# ---------------------------------------------------------------------- amps
+stage_amps() {
+    log "FS2119 speaker amps as Windows plays them (ALGO), at boot and after every resume"
+    install -Dm644 -t /usr/local/lib/matebook-x-pro-2024 "$HERE/amps.py" "$CFG/amps-algo.tsv" "$CFG/amps-inbox.tsv"
+    install -m644 "$CFG/matebook-amps.service" /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable -q matebook-amps.service
+    systemctl restart matebook-amps.service || { journalctl -b -u matebook-amps -n 20 --no-pager; exit 1; }
+    echo "    $(cat /run/matebook-amps)"
+}
+
 # ----------------------------------------------------------------------- dsp
 stage_dsp() {
-    log "PipeWire speaker DSP (LSP EQ/compressor/limiter, Calf bass enhancer) as the sink \"MateBook Speakers\""
-    apt-get install -y --no-install-recommends lsp-plugins-lv2 calf-plugins >/dev/null
+    log "PipeWire speaker DSP (Windows' Histen + SmartPA, swh LADSPA, LSP guard) as the sink \"MateBook Speakers\""
+    apt-get install -y --no-install-recommends lsp-plugins-lv2 swh-plugins >/dev/null
     install -Dm644 "$CFG/60-matebook-speakers-dsp.conf" \
         /etc/pipewire/pipewire.conf.d/60-matebook-speakers-dsp.conf
 }
 
-# After the restart. The volume slider must act before the DSP: MateBook Speakers
-# becomes the default output, and the raw Speaker sink, which comes after the
-# limiter, goes to 100%.
+# After the restart. MateBook Speakers becomes the default output (its slider
+# acts inside the chain, after the dynamics), and the raw Speaker sink after it
+# goes to 100%.
 dsp_default() {
     [[ -n $USER_NAME && -S /run/user/$USER_UID/bus ]] || return 0
     local spk=""
@@ -136,11 +148,11 @@ dsp_default() {
 
 main() {
     local stages=("$@")
-    [[ ${#stages[@]} -eq 0 ]] && stages=(power audio dsp)
+    [[ ${#stages[@]} -eq 0 ]] && stages=(power audio amps dsp)
     for s in "${stages[@]}"; do
         case "$s" in
-            power|audio|dsp) "stage_$s" ;;
-            *) echo "unknown stage '$s' (power audio dsp)" >&2; exit 1 ;;
+            power|audio|amps|dsp) "stage_$s" ;;
+            *) echo "unknown stage '$s' (power audio amps dsp)" >&2; exit 1 ;;
         esac
     done
     log "Restarting the desktop user's PipeWire session"

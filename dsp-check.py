@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Measure the speaker DSP through PipeWire, silently.
+"""Check the speaker DSP through PipeWire, silently.
 
 Loads the filter-chain from configs/60-matebook-speakers-dsp.conf into a
-private pipewire client (virtual sink -> chain -> virtual source; the speakers
-are never touched), plays synthetic test signals through it and checks what
-you hear on the laptop:
+private pipewire client (virtual sink -> chain -> virtual 4-channel source;
+the speakers are never touched), plays test signals through it and checks:
 
-  width    side/mid above 1 kHz raised, bass below 150 Hz kept mono
-  squash   the dynamics flatten a loud master by at most a few dB
-  kick     the kick still stands out over the bass line when loud
-  pumping  a steady 2.5 kHz tone does not dip when the kick and bass hit
-  clean    the bass enhancer does not smear distortion up to 2.5 kHz
-  safety   peak <= 0 dBFS, little energy below 90 Hz (speakers cannot play it)
-  level    a loud master stays about as loud as with the previous tuning
+  crossover  the tweeters (RL RR) get no bass
+  safety     a loud master does not clip any output
+  guard      sustained full-scale tones stay at each speaker group's power
+             bound: what a full-scale sine gets in the amps' INBOX mode
+             (amps.py runs them in ALGO, +8.8 dB woofers, +8.2 dB tweeters)
+  music      a dense master stays under the guard (the Histen dynamics hold it)
+  volume     the sink slider acts after the dynamics, cubic like GNOME
 
-  ./dsp-check.py [conf]        # ~30 s; exit 1 if a check fails
+  ./dsp-check.py [conf]        # about 1 min; exit 1 if a check fails
 """
+import json
 import os
 import signal
 import struct
@@ -28,6 +28,7 @@ import numpy as np
 
 FS = 48000
 HERE = os.path.dirname(os.path.abspath(__file__))
+BOUND = {"woofers": -3 - 8.8, "tweeters": -3 - 8.2}     # dBFS RMS on the chain outputs, the guards' thresholds
 HEADER = """context.properties = { log.level = 0 }
 context.spa-libs = { audio.convert.* = audioconvert/libspa-audioconvert  support.* = support/libspa-support }
 context.modules = [
@@ -60,34 +61,38 @@ def write_wav(path, x):
     open(path, "wb").write(hdr + data)
 
 
-def read_wav(path):
+def read_wav(path, ch=4):
     b = open(path, "rb").read()
     i = 12
     while b[i:i + 4] != b"data":
         i += 8 + int.from_bytes(b[i + 4:i + 8], "little")
     d = b[i + 8:]                      # to EOF: the size field may be stale
-    return np.frombuffer(d[:len(d) // 8 * 8], "<f4").reshape(-1, 2).astype(float)
+    return np.frombuffer(d[:len(d) // (4 * ch) * 4 * ch], "<f4").reshape(-1, ch).astype(float)
 
 
-def render(conf_text, signals):
+def render(conf_text, takes):
+    """takes: (stereo signal, sink volume as wpctl/GNOME show it); returns FL FR RL RR per take."""
     with tempfile.TemporaryDirectory() as d:
         conf = os.path.join(d, "dsp-check.conf")
         open(conf, "w").write(conf_text)
         pw = subprocess.Popen(["pipewire", "-c", conf], stderr=subprocess.DEVNULL)
         try:
             for _ in range(50):
-                if '"dsptest.out"' in subprocess.run(["pw-cli", "ls", "Node"],
-                                                     capture_output=True, text=True).stdout:
+                nodes = json.loads(subprocess.run(["pw-dump"], capture_output=True, text=True).stdout or "[]")
+                ids = {(o.get("info") or {}).get("props", {}).get("node.name"): o["id"] for o in nodes
+                       if o.get("type") == "PipeWire:Interface:Node"}
+                if "dsptest.in" in ids and "dsptest.out" in ids:
                     break
                 time.sleep(0.2)
             else:
                 sys.exit("dsp-check: filter-chain did not start (pipewire -c dsp-check.conf)")
             outs = []
-            for i, x in enumerate(signals):
+            for i, (x, vol) in enumerate(takes):
                 src, dst = f"{d}/in{i}.wav", f"{d}/out{i}.wav"
                 write_wav(src, x)
+                subprocess.run(["wpctl", "set-volume", str(ids["dsptest.in"]), str(vol)], check=True)
                 rec = subprocess.Popen(["pw-record", "--target", "dsptest.out", "--format", "f32",
-                                        "--rate", str(FS), "--channels", "2", dst],
+                                        "--rate", str(FS), "--channels", "4", dst],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 time.sleep(0.5)
                 subprocess.run(["pw-play", "--target", "dsptest.in", src], check=True)
@@ -125,81 +130,63 @@ def music(seconds=10):
     return np.stack([x, x], 1)
 
 
-def stereo_noise(seconds=6):
-    """Pink noise, L/R correlation 0.5, -20 dBFS RMS."""
-    rng = np.random.default_rng(1)
-    n = int(seconds * FS)
+def pink(n, seed):
     f = np.fft.rfftfreq(n, 1 / FS)
     f[0] = f[1]
+    x = np.fft.irfft(np.fft.rfft(np.random.default_rng(seed).standard_normal(n)) / np.sqrt(f), n)
+    return x / np.sqrt(np.mean(x ** 2))
 
-    def pink():
-        x = np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) / np.sqrt(f), n)
-        return x / np.sqrt(np.mean(x ** 2))
-    c, a, b = pink(), pink(), pink()
+
+def stereo_noise(seconds=6):
+    """Pink noise, L/R correlation 0.5, -20 dBFS RMS."""
+    n = int(seconds * FS)
+    c, a, b = pink(n, 1), pink(n, 2), pink(n, 3)
     return np.stack([c + a, c + b], 1) * np.sqrt(0.5) * 0.1
 
 
-def steady(y):
-    a = np.abs(y).max(1)
-    on = np.flatnonzero(a > a.max() * 1e-3)
-    return y[on[0] + FS:on[-1] - FS // 4]
+def master(seconds=12):
+    """A dense modern master: pink noise on an 8th-note drum envelope, peaks -0.3 dBFS, RMS about -8 dBFS."""
+    n = int(seconds * FS)
+    t = np.arange(n) / FS
+    env = 0.55 + 0.45 * np.exp(-(t % 0.25) / 0.06)
+    c, a, b = pink(n, 3), pink(n, 4), pink(n, 5)
+    x = np.stack([c + 0.6 * a, c + 0.6 * b], 1) * env[:, None]
+    return np.tanh(2.2 * x / np.abs(x).max()) * 0.966
 
 
-def crest(x):
-    return 20 * np.log10(np.abs(x).max() / np.sqrt(np.mean(x ** 2)))
+def sine(f, seconds=8):
+    return np.stack([np.sin(2 * np.pi * f * np.arange(int(seconds * FS)) / FS) * 0.999] * 2, 1)
 
 
-def kick_over_bass(x):
-    """Kick peak over the sustained bass line, 90-300 Hz, dB (kick every 0.5 s)."""
-    k, beat = FS // 100, FS // 2
-    env = np.sqrt(np.convolve(band(x, 90, 300) ** 2, np.ones(k) / k, "same"))
-    return np.median([20 * np.log10(env[i:i + beat // 5].max() / env[i + int(0.3 * FS):i + int(0.45 * FS)].mean())
-                      for i in range(0, len(env) - beat, beat)])
-
-
-def tone_swing(x, f0=2500, win=0.02):
-    """p5..p95 spread of the level of a steady tone, dB.
-
-    Band-passed around the tone first: the 20 ms boxcar alone lets the bass leak
-    in, and a linear bass boost then read as distortion (+0.4 dB for +8 dB at
-    150 Hz). Intermodulation near the tone and pumping stay inside the band.
-    """
-    x = band(x, f0 / 1.25, f0 * 1.25)
-    z = x * np.exp(-2j * np.pi * f0 * np.arange(len(x)) / FS)
-    k = int(win * FS)
-    env = 20 * np.log10(np.abs(np.convolve(z, np.ones(k) / k, "valid")) + 1e-12)
-    return np.ptp(np.percentile(env, [5, 95]))
-
-
-def side_mid(y, lo, hi):
-    m, s = band((y[:, 0] + y[:, 1]) / 2, lo, hi), band((y[:, 0] - y[:, 1]) / 2, lo, hi)
-    return db(np.mean(s ** 2)) - db(np.mean(m ** 2))
+def loudest(y, ch):
+    """Highest 250 ms RMS of the louder channel, dBFS, after the first 2 s (signal on, the guard settled)."""
+    on = np.flatnonzero(np.abs(y).max(1) > 1e-3)
+    y = y[on[0] + 2 * FS:on[-1], ch]
+    k = len(y) // (FS // 4)
+    return db((y[:k * (FS // 4)] ** 2).reshape(k, FS // 4, -1).mean(1).max(1)).max()
 
 
 def main():
     conf = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "configs/60-matebook-speakers-dsp.conf")
-    loud_in = music()
-    wide_in = stereo_noise()
-    loud, quiet, wide = (steady(y) for y in render(test_conf(conf),
-                                                   [loud_in, loud_in * 10 ** (-30 / 20), wide_in]))
-    L, Q = loud[:, 0], quiet[:, 0]
+    W, T = slice(0, 2), slice(2, 4)
+    noise, loud, bass, treble, dense, v1, v04 = render(test_conf(conf), [
+        (stereo_noise(), 1.0), (music(), 1.0), (sine(150), 1.0), (sine(10000), 1.0), (master(), 1.0),
+        (stereo_noise(3), 1.0), (stereo_noise(3), 0.4)])
+    tw = noise[:, T]
     checks = [
-        ("width: side/mid 1-8 kHz vs input, dB", side_mid(wide, 1000, 8000) - side_mid(wide_in, 1000, 8000), ">=", 3),
-        ("width: side/mid 40-150 Hz vs input, dB", side_mid(wide, 40, 150) - side_mid(wide_in, 40, 150), "<=", -6),
-        ("squash: crest quiet - loud, dB", crest(Q) - crest(L), "<=", 3),
-        ("kick: over the bass, quiet - loud, dB", kick_over_bass(Q) - kick_over_bass(L), "<=", 1.5),
-        ("pumping: 2.5 kHz tone swing loud - quiet, dB", tone_swing(L) - tone_swing(Q), "<=", 1.5),
-        ("clean: 2.5 kHz tone swing quiet, dB", tone_swing(Q), "<=", 1.5),
-        ("safety: peak, dBFS", 20 * np.log10(np.abs(loud).max()), "<=", 0),
-        ("safety: energy below 90 Hz, %", 100 * np.mean(band(L, 0, 90) ** 2) / np.mean(L ** 2), "<=", 20),
-        # previous tuning (d983bba): -26.6; the volume slider has more than 1.5 dB left
-        ("level: 200 Hz-8 kHz RMS, dBFS", db(np.mean(band(L, 200, 8000) ** 2)), ">=", -28),
+        ("crossover: tweeters below 1 kHz re all, dB", db(np.sum(band(tw, 20, 1000) ** 2)) - db(np.sum(tw ** 2)), "<=", -30),
+        ("safety: loud master, peak of any output, dBFS", 20 * np.log10(np.abs(loud).max()), "<=", 0),
+        ("guard: woofers, 150 Hz full-scale sine, dBFS RMS", loudest(bass, W), "<=", BOUND["woofers"] + 0.5),
+        ("guard: tweeters, 10 kHz full-scale sine, dBFS RMS", loudest(treble, T), "<=", BOUND["tweeters"] + 0.5),
+        ("music: dense master, woofers, dBFS RMS", loudest(dense, W), "<=", BOUND["woofers"] - 1),
+        ("volume: slider 0.4 vs 1.0 off the cube, dB",
+         abs(db(np.mean(v04[:, 0] ** 2)) - db(np.mean(v1[:, 0] ** 2)) - 60 * np.log10(0.4)), "<=", 0.5),
     ]
     bad = 0
     for name, v, op, lim in checks:
         ok = v >= lim if op == ">=" else v <= lim
         bad += not ok
-        print(f"{'OK  ' if ok else 'FAIL'} {name:46} {v:7.2f}  (want {op} {lim})")
+        print(f"{'OK  ' if ok else 'FAIL'} {name:50} {v:7.2f}  (want {op} {lim:.1f})")
     sys.exit(1 if bad else 0)
 
 

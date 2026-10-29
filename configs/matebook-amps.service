@@ -1,0 +1,17 @@
+# The FS2119 speaker amps as Windows plays them (amps.py). The BIOS leaves the tweeter amp 21-29 dB down;
+# after a resume the amps are checked again and written only if they lost the setup.
+# INBOX instead of ALGO (8-9 dB quieter, Windows' mode without its speaker protection):
+#   echo MODE=inbox | sudo tee /etc/default/matebook-amps && sudo systemctl start matebook-amps
+[Unit]
+Description=MateBook X Pro 2024 speaker amps (FS2119) as Windows plays
+After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+Environment=MODE=algo
+EnvironmentFile=-/etc/default/matebook-amps
+ExecStartPre=-/usr/sbin/modprobe i2c-dev
+ExecStart=/usr/bin/python3 -I /usr/local/lib/matebook-x-pro-2024/amps.py $MODE
+
+[Install]
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

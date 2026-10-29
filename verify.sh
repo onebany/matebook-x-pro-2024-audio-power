@@ -20,11 +20,16 @@ for c in Speaker 'Bass Speaker'; do
     amixer -c sofhdadsp sget "$c" 2>/dev/null | grep -q '\[100%\]' && ok "$c 100%" || fail "$c not at 100% (sudo ./install.sh audio)"
 done
 
+echo "amps"
+amps="$(cat /run/matebook-amps 2>/dev/null)"
+[[ $amps == algo:* || $amps == inbox:* ]] && ok "FS2119 amps: $amps" || fail "FS2119 amps not set up: '${amps:-no status}' (systemctl status matebook-amps; sudo ./install.sh amps)"
+
 echo "PipeWire"
 sink="$(wpctl status 2>/dev/null | grep -oE '[0-9]+\. Meteor Lake-P HD Audio Controller Speaker' | grep -oE '^[0-9]+')"
 pw-dump 2>/dev/null | grep -qE '"api.alsa.soft-mixer": *(true|"true")' && ok "soft-mixer on the ALSA card" || fail "soft-mixer not applied (WirePlumber rule; systemctl --user restart wireplumber)"
+[[ -e /usr/lib/ladspa/sc4_1882.so && -e /usr/lib/ladspa/fast_lookahead_limiter_1913.so ]] && ok "LADSPA sc4 + fastLookaheadLimiter (swh-plugins)" || fail "swh-plugins missing: the DSP chain cannot load (sudo ./install.sh dsp)"
 wpctl status 2>/dev/null | grep -q 'matebook_speakers' && ok "DSP filter node present" || fail "DSP filter missing (journalctl --user -u pipewire -b | grep -i filter)"
-wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q 'node.name = "matebook_speakers"' && ok "default sink is MateBook Speakers (the slider acts before the DSP)" || fail "default sink is not MateBook Speakers (sudo ./install.sh dsp)"
+wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q 'node.name = "matebook_speakers"' && ok "default sink is MateBook Speakers (its slider acts after the dynamics)" || fail "default sink is not MateBook Speakers (sudo ./install.sh dsp)"
 [[ -n $sink ]] && wpctl get-volume "$sink" | grep -q 'Volume: 1.00' && ok "raw Speaker sink at 100%" || fail "raw Speaker sink not at 100%: it turns the DSP output down after the limiter (wpctl set-volume ${sink:-ID} 1)"
 [[ -n $sink ]] && wpctl inspect "$sink" | grep -q 'audio.position = "\[ FL, FR, RL, RR \]"' && ok "Speaker sink FL FR (woofers) RL RR (tweeters)" || fail "Speaker sink is not 4 channels FL FR RL RR (wpctl inspect ${sink:-ID})"
 if [[ "${1:-}" == "--live" ]]; then
@@ -41,8 +46,8 @@ import json,sys
 d=json.load(sys.stdin); n={o["id"]:o["info"]["props"].get("node.name","") for o in d if o["type"].endswith("Node")}
 links=[(n.get(o["info"]["output-node-id"],""), n.get(o["info"]["input-node-id"],"")) for o in d if o["type"].endswith("Link")]
 ok_in  = any(b=="matebook_speakers" and "matebook" not in a for a,b in links)
-ok_out = any(a=="matebook_speakers.out" and "HiFi__Speaker__sink" in b for a,b in links)
-sys.exit(0 if ok_in and ok_out else 1)'; then ok "audio flows app -> DSP -> Speaker"; else fail "DSP not in the path (wpctl status; pw-dump links)"; fi
+ok_out = sum(a=="matebook_speakers.out" and "HiFi__Speaker__sink" in b for a,b in links) == 4
+sys.exit(0 if ok_in and ok_out else 1)'; then ok "audio flows app -> DSP -> Speaker, 4 channels"; else fail "DSP not in the path in 4 channels (wpctl status; pw-dump links)"; fi
     wait
     [[ -n $sink ]] && wpctl set-mute "$sink" "$was_muted"
 fi

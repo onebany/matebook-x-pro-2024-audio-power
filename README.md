@@ -32,60 +32,61 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 | UCM | card file `conf.d/sof-hda-dsp/HUAWEI-VGHH_XX-M1010-VGHH_XX_PCB.conf` → a copy of the stock `sof-hda-dsp.conf` whose HiFi verb adds `PlaybackChannels 4` to Speaker | the stock UCM opens Speaker in 2 channels, which the 4-channel PCM refuses (Dummy Output) |
 | ALSA | `Speaker` (DAC 0x23, woofers) and `Bass Speaker` (DAC 0x22, tweeters, despite the name) at 100%, stored in `asound.state` | tweeter/woofer balance |
 | WirePlumber | `api.alsa.soft-mixer = true` | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
-| PipeWire | filter-chain sink **MateBook Speakers**, the default output, feeding the Speaker sink: LSP 16-band EQ → Calf Bass Enhancer → LSP mid/side EQ (100 Hz high-pass, 150 Hz +6 dB, +6 dB side above 200 Hz) → LSP 3-band compressor (250 Hz / 1 kHz) → LSP limiter | the tuning that used to live in an EasyEffects preset, now inside pipewire: no GUI app, no session dependencies, active on the lock screen |
+| Amps | `matebook-amps.service` → `amps.py algo` at boot and after every resume: the three FourSemi FS2119 amps (ACPI `HWSP0001`, I2C) get the registers Windows' MultiPADriver writes when it plays | the BIOS leaves the tweeter amp 21-29 dB down |
+| PipeWire | filter-chain sink **MateBook Speakers**, the default output, feeding the Speaker sink in 4 channels: Huawei Histen (EQ, 3-band compressor, limiter) → the sink volume → SmartPA crossover (woofers FL FR below 3.2 kHz, tweeters RL RR above 3 kHz) → a power guard per speaker group | the sound of Windows with "Audio enhancements" on |
 
 GNOME shows two outputs: **MateBook Speakers** (the DSP, default) and the raw
 **Speaker** sink without it, which stays at 100% (`verify.sh` checks both;
-`install.sh dsp` sets them). The MateBook Speakers slider scales the input,
-before the DSP, so at low and medium volume the compressor and limiter stay
-idle and only full volume is squeezed. (As a WirePlumber smart filter the
-slider stayed on the Speaker sink, after the limiter, and every volume was
-squeezed alike.) Bluetooth or USB outputs are untouched.
+`install.sh dsp` sets them). The MateBook Speakers slider acts inside the
+chain, after the Histen dynamics, as the Windows volume does: the sound keeps
+its character at every volume. Bluetooth or USB outputs are untouched.
 
-Changes against the EasyEffects preset, each measured with `./dsp-check.py`:
+The chain is the approximation a Windows agent fitted to WASAPI loopback
+captures of a test file (Histen set SMART_ONE, which Windows uses below 53 %
+volume; SMART_THREE above differs only below 250 Hz and in stereo width).
+Through it the same file lands within 0.3-2 dB per third octave of Windows'
+own loopback on every level from -45 to -15 dBFS. Its LADSPA compressors and
+limiter come from `swh-plugins`.
 
-- 100 Hz high-pass after the enhancer (which has already turned the sub-bass
-  into audible harmonics), 36 dB/oct, and no 70 Hz shelf. Below 100 Hz the
-  speakers produce next to nothing (Windows: 80 Hz is 19 dB under the mids),
-  yet that energy made the limiter turn the audible band down.
-- Enhancer drive 2 instead of 10: at 10 the harmonics no longer followed the
-  bass (loud bass 6 dB weaker than quiet bass).
-- Limiter: lookahead 10 ms so the 20 ms release is real (with 5 ms it is cut
-  to 10 ms and the limiter chops every cycle of a 50 Hz note); ALR stays off,
-  it pumps the mix 8 dB on kicks.
-- Body: in the room (`./mic-sweep.py`, below) 200-630 Hz sat 8-13 dB further
-  under 1-2.5 kHz than on Windows. 300 Hz +9 dB wide, 500 Hz +5 dB, 1400 Hz
-  -4 dB and 150 Hz +6 dB (after the enhancer, which keeps its input) bring
-  125 Hz-4 kHz to 3.7 dB rms of the Windows curve at medium volume (was 6.7).
-- 3-band compressor split at 250 Hz and 1 kHz, like Histen's DRC in the
-  Windows driver: the single-band one dipped a steady 2.5 kHz tone 2 dB on
-  every kick. The bass band (ratio 4, 80 ms attack) lets the kick through and
-  holds the sustained bass, so at full volume the woofers get less 80-250 Hz
-  than with any earlier tuning while medium volume gets the full lift.
-  Loudness in the room: +1.7 to +2.9 dB for ordinary masters, -0.7 dB for
-  very loud ones at full volume (the limiter's ceiling now carries the body).
-- Side +6 dB above 200 Hz for width; the bass below stays mono.
+`./dsp-check.py` loads the chain into a private pipewire client (virtual sink
+→ chain → virtual 4-channel source, never the speakers) and checks the
+crossover (no bass on the tweeters), clipping, the guard, that a dense master
+stays under the guard and that the slider acts after the dynamics; about
+1 min, needs `python3-numpy`. Run it after any change to
+`configs/60-matebook-speakers-dsp.conf`, then `sudo ./install.sh dsp`.
 
 `./mic-sweep.py` (out loud, ~9 s; pause the music) plays pink noise at full
 volume through MateBook Speakers, or with `--raw` straight into the Speaker
 sink, records the built-in mics and prints the response per 1/3 octave next to
 Notebookcheck's Windows measurement of this laptop. Trust 125 Hz-4 kHz only:
-the mic path is flat from 100 Hz up, but the mics in the lid hear the tweeters
-off-axis. The room response with any chain is the `--raw` take plus the
-chain's own transfer function (measured silently); that prediction matched
-real takes of two chains within 1.1 and 1.0 dB on average, so tuning can stay
-silent. This tuning, measured: 4.6 dB rms of the Windows curve at full volume
-(the previous one 7.8), body 200-630 Hz -2.6 dB (was -9.5).
+the mics in the lid hear the tweeters off-axis.
 
-`./dsp-check.py` loads the filter-chain into a private pipewire client
-(virtual sink → chain → virtual source, never the speakers), plays synthetic
-test signals through it and checks width, squash, kick, pumping, distortion,
-peak, sub-bass and level; about 30 s, needs `python3-numpy`. Run it after any
-change to the tuning.
+### Amps: ALGO, and the guard instead of Huawei's protection
 
-Tuning lives in `configs/60-matebook-speakers-dsp.conf` (values in dB in the
-comments). After editing: `sudo ./install.sh dsp` or copy the file to
-`/etc/pipewire/pipewire.conf.d/` and `systemctl --user restart pipewire`.
+Windows' MultiPADriver has two setups for the amps: INBOX (scenes 2 + 3), its
+default without the Huawei APO, and ALGO (scenes 0 + 3), the gain it plays at
+while Huawei's SmartPA protects the speakers (voltage/current sense, a coil
+temperature model, a power limiter). `amps.py` writes ALGO: in the room it is
++8.8 dB on the woofers and +8.2 dB on the tweeters over INBOX, and 100 % on
+the slider is then about as loud as Windows. INBOX alone tops out 8-9 dB
+lower, which is why GNOME's over-amplification seemed needed.
+
+SmartPA does not run here. In its place the chain ends in a power guard per
+speaker group (LSP compressor, 250 ms RMS, ratio 100): never more than a
+full-scale sine gets in INBOX, -11.8 dBFS RMS on the woofer outputs and
+-11.2 on the tweeters. Music does not reach it: the Histen dynamics hold a
+dense master at -14 dBFS RMS. What it catches is sustained tones, a held bass
+note at 100-150 Hz most of all, which without it got 4x that power. Short
+peaks pass, as on Windows. The plans in `configs/amps-*.tsv` are the driver's
+`.dat` records in the order of its ETW trace; every write is read back.
+
+Above 100 % (over-amplification) the samples after the dynamics clip; there
+is no point in it any more.
+
+Quieter amps (INBOX): `echo MODE=inbox | sudo tee /etc/default/matebook-amps`
+and `sudo systemctl start matebook-amps`. Back to the BIOS setup:
+`sudo systemctl disable matebook-amps` and reboot; then the tweeters are
+quiet again and the sound turns dull.
 
 ### Replaced
 
@@ -99,16 +100,9 @@ service. EasyEffects itself is left installed.
 ### Speakers in 4 channels
 
 The Speaker sink is FL FR RL RR: FL FR drive the four woofers (DAC 0x23),
-RL RR the two tweeters (DAC 0x22). Windows sends the same layout and splits
-it in the Huawei SmartPA effect (woofers below 3.2 kHz, tweeters above 3 kHz).
-With the stock 2-channel topology both DACs played the same stereo signal, so
-the woofers carried the whole band. MateBook Speakers still sends stereo with
-`stream.dont-remix`, so for now only FL FR are linked and the tweeters are
-silent. That costs nothing audible yet: in the room (2-channel topology, one
-group switched off at a time) the tweeters played the same full-band signal
-13-24 dB under the woofers above 4 kHz, and both groups together measured
-within 1.5 dB of the woofers alone. Why the tweeters are that quiet with the
-FourSemi FS2119 amps as the BIOS leaves them is open.
+RL RR the two tweeters (DAC 0x22), the layout Windows sends. With the stock
+2-channel topology both DACs played the same stereo signal, so the woofers
+carried the whole band.
 
 The kernel fixes the channels of the HDA link up from the last copier with
 its name, which is the capture one. That is why the capture side of the link
@@ -131,7 +125,7 @@ the stock topology, or the reverse, leaves Dummy Output.
 ## Requirements
 
 Ubuntu 26.04, PipeWire 1.6 / WirePlumber 0.5, `lsp-plugins-lv2` and
-`calf-plugins` from the archive (installed by `install.sh`).
+`swh-plugins` from the archive (installed by `install.sh`).
 
 ## License
 
