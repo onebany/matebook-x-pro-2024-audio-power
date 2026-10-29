@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Huawei MateBook X Pro 2024 on Ubuntu 26.04:
-#   power  — Intel xe driver for the Meteor Lake iGPU, intel-lpmd
+#   power  — CPU limits for the barely ramping fan, intel-lpmd (the iGPU stays on i915)
 #   audio  — SOF topology with the speakers in 4 channels, UCM, ALSA levels, WirePlumber rule
 #   amps   — the FS2119 speaker amps as Windows plays them, at boot and after every resume
 #   dsp    — PipeWire filter-chain sink "MateBook Speakers" (Windows' Histen + SmartPA sound)
@@ -9,7 +9,7 @@
 #   sudo ./install.sh              # everything
 #   sudo ./install.sh amps dsp     # any subset of: power audio amps dsp
 #
-# Re-runnable. Reboot once after the first run (GRUB + SOF modprobe options).
+# Re-runnable. Reboot once after the first run (SOF topology and modprobe options).
 set -euo pipefail
 
 [[ $EUID -eq 0 ]] || { echo "run as root: sudo $0" >&2; exit 1; }
@@ -33,15 +33,11 @@ user_systemctl() { as_user systemctl --user "$@"; }
 
 # --------------------------------------------------------------------- power
 stage_power() {
-    log "GRUB: i915 -> xe for the Meteor Lake iGPU (runtime PM, ~2x battery)"
-    if grep -q 'xe.force_probe=7d55' /etc/default/grub; then
-        echo "    already set"
-    else
-        sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 i915.force_probe=!7d55 xe.force_probe=7d55"/' \
-            /etc/default/grub
-        update-grub >/dev/null
-        echo "    reboot required for xe"
-    fi
+    log "CPU limits (the EC fan barely ramps on Linux): every core at most 3.2 GHz, RAPL PL1 18 W / PL2 30 W"
+    install -m644 "$CFG/matebook-cpu-limits.service" /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable -q matebook-cpu-limits.service
+    systemctl restart matebook-cpu-limits.service
 
     log "intel-lpmd with Intel's Meteor Lake profile (intel_lpmd_config_F6_M170.xml)"
     apt-get install -y --no-install-recommends intel-lpmd >/dev/null

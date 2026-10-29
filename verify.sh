@@ -6,10 +6,14 @@ set -u   # no pipefail: grep -q closing a pipe must not fail a check
 ok()   { printf '  \033[32mOK\033[0m   %s\n' "$*"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$*"; rc=1; }
 rc=0
+HERE="$(cd "$(dirname "$0")" && pwd)"
 
 echo "power"
-grep -qs '^DRIVER=xe' /sys/class/drm/card*/device/uevent && ok "iGPU on xe" || fail "iGPU not on xe (reboot after install? cat /proc/cmdline)"
+grep -qs '^DRIVER=i915' /sys/class/drm/card*/device/uevent && ok "iGPU on i915" || fail "iGPU not on i915 (xe gave GPU resets here; cat /proc/cmdline)"
 systemctl is-active -q intel_lpmd && ok "intel_lpmd active" || fail "intel_lpmd not active"
+max="$(sort -n /sys/devices/system/cpu/cpufreq/policy*/scaling_max_freq | tail -1)"
+systemctl is-enabled -q matebook-cpu-limits && (( max <= 3200000 )) && ok "CPU capped at $((max / 1000)) MHz (matebook-cpu-limits)" || fail "CPU not capped at 3.2 GHz: ${max:-?} kHz (sudo ./install.sh power)"
+cmp -s /etc/systemd/system/matebook-cpu-limits.service "$HERE/configs/matebook-cpu-limits.service" && ok "matebook-cpu-limits.service as in the repo" || fail "matebook-cpu-limits.service differs from configs/ (sudo ./install.sh power)"
 
 echo "SOF / ALSA"
 tplg="$(cat /sys/module/snd_sof_pci/parameters/tplg_filename 2>/dev/null)"

@@ -18,11 +18,17 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 
 ## Power
 
-- **xe** instead of i915 for the Meteor Lake iGPU (`i915.force_probe=!7d55 xe.force_probe=7d55`): working runtime PM, roughly 8 h on battery instead of 3.
+- **CPU limits**, `matebook-cpu-limits.service`: the EC fan stays at about
+  3700-4600 rpm even at 100 °C and Linux cannot drive it, so uncapped cores sit
+  at 100 °C and throttle. The service caps every core at 3.2 GHz and sets RAPL
+  PL1 18 W (28 s) / PL2 30 W at boot; one core then runs 3.18 GHz at 81 °C, idle
+  73 °C at 11.7 W.
 - **intel-lpmd** with Intel's own Meteor Lake profile (`intel_lpmd_config_F6_M170.xml`
   from the package: workload-type states — idle, battery life, sustained,
   bursty — with matching EPP/EPB). lpmd reads that per-model file before the
   generic `intel_lpmd_config.xml`, so the generic one is left as packaged.
+- The iGPU stays on **i915**: xe (`i915.force_probe=!7d55 xe.force_probe=7d55`)
+  gave working runtime PM, about 8 h on battery instead of 3, but GPU resets here.
 
 ## Audio (Conexant CX11970, 2 tweeters + 4 woofers)
 
@@ -124,12 +130,13 @@ the stock topology, or the reverse, leaves Dummy Output.
 
 ## Requirements
 
-Ubuntu 26.04, PipeWire 1.6 / WirePlumber 0.5, `lsp-plugins-lv2` and
+Ubuntu 26.10 (kernel 7.3), PipeWire 1.6 / WirePlumber 0.5, `lsp-plugins-lv2` and
 `swh-plugins` from the archive (installed by `install.sh`).
 
 ## License
 
-MIT. SOF/UCM findings come from
+MIT; `topology/spk4.patch` and `configs/sof-hda-generic-ace1-4ch-spk4.tplg` derive
+from the SOF topology sources (BSD-3-Clause). SOF/UCM findings come from
 [Arch BBS #298027](https://bbs.archlinux.org/viewtopic.php?id=298027) and
 [alsa-ucm-conf PR #410](https://github.com/alsa-project/alsa-ucm-conf/pull/410);
-xe / intel-lpmd from [daichendt.one](https://daichendt.one/posts/matebook-x-pro-2024-linux/).
+xe and intel-lpmd from [daichendt.one](https://daichendt.one/posts/matebook-x-pro-2024-linux/).
