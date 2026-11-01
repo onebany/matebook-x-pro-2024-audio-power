@@ -6,7 +6,8 @@ Install (one command), then reboot:
 sudo apt install -y git && git clone https://github.com/onebany/matebook-x-pro-2024-audio-power && sudo ./matebook-x-pro-2024-audio-power/install.sh
 ```
 
-Check after the reboot: `./matebook-x-pro-2024-audio-power/verify.sh --live`
+Check after the reboot: `./matebook-x-pro-2024-audio-power/verify.sh --live`.
+On any other laptop (DMI not `HUAWEI` / `VGHH-XX`) `install.sh` stops before changing anything.
 
 All three MateBook X Pro 2024 repos ([camera](https://github.com/onebany/matebook-x-pro-2024-camera),
 [fingerprint](https://github.com/onebany/matebook-x-pro-2024-fingerprint),

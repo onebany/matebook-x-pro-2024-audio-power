@@ -13,6 +13,9 @@
 set -euo pipefail
 
 [[ $EUID -eq 0 ]] || { echo "run as root: sudo $0" >&2; exit 1; }
+# The topology, CPU limits and amp scenes are for this one model; nothing changes on any other.
+MODEL="$(cat /sys/class/dmi/id/sys_vendor) $(cat /sys/class/dmi/id/product_name)"
+[[ $MODEL == "HUAWEI VGHH-XX" ]] || { echo "only for the Huawei MateBook X Pro 2024 (VGHH-XX), this is $MODEL" >&2; exit 1; }
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFG="$HERE/configs"
