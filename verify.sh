@@ -32,26 +32,29 @@ echo "PipeWire"
 sink="$(wpctl status 2>/dev/null | grep -oE '[0-9]+\. Meteor Lake-P HD Audio Controller Speaker' | grep -oE '^[0-9]+')"
 pw-dump 2>/dev/null | grep -qE '"api.alsa.soft-mixer": *(true|"true")' && ok "soft-mixer on the ALSA card" || fail "soft-mixer not applied (WirePlumber rule; systemctl --user restart wireplumber)"
 [[ -e /usr/lib/ladspa/sc4_1882.so && -e /usr/lib/ladspa/fast_lookahead_limiter_1913.so ]] && ok "LADSPA sc4 + fastLookaheadLimiter (swh-plugins)" || fail "swh-plugins missing: the DSP chain cannot load (sudo ./install.sh dsp)"
-wpctl status 2>/dev/null | grep -q 'matebook_speakers' && ok "DSP filter node present" || fail "DSP filter missing (journalctl --user -u pipewire -b | grep -i filter)"
-wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q 'node.name = "matebook_speakers"' && ok "default sink is MateBook Speakers (its slider acts after the dynamics)" || fail "default sink is not MateBook Speakers (sudo ./install.sh dsp)"
-[[ -n $sink ]] && wpctl get-volume "$sink" | grep -q 'Volume: 1.00' && ok "raw Speaker sink at 100%" || fail "raw Speaker sink not at 100%: it turns the DSP output down after the limiter (wpctl set-volume ${sink:-ID} 1)"
+cmp -s /etc/wireplumber/wireplumber.conf.d/60-matebook-speakers-dsp.conf "$HERE/configs/60-matebook-speakers-dsp.conf" && ok "DSP rule for the Speaker output as in the repo" || fail "DSP rule missing or differs from configs/ (sudo ./install.sh dsp)"
+[[ ! -e /etc/pipewire/pipewire.conf.d/60-matebook-speakers-dsp.conf ]] && ok "no separate MateBook Speakers sink (earlier versions)" || fail "old MateBook Speakers sink still configured in /etc/pipewire (sudo ./install.sh dsp)"
+pid="$(systemctl --user show -p MainPID --value pipewire 2>/dev/null)"
+[[ -n $sink ]] && wpctl inspect "$sink" | grep -q 'audioconvert.filter-graph.0' &&
+    ! journalctl --user -b _PID="${pid:-0}" -o cat 2>/dev/null | grep -qiE "can't load filter-graph|failed to activate graph" &&
+    ok "DSP inside Speaker (graph set, no load errors in this PipeWire)" || fail "Speaker plays without the DSP (journalctl --user -u pipewire -b | grep -i graph)"
+wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q 'node.name = "alsa_output.*HiFi__Speaker__sink"' && ok "default output is Speaker (its slider acts after the dynamics)" || fail "default output is not Speaker (wpctl set-default ${sink:-ID})"
 [[ -n $sink ]] && wpctl inspect "$sink" | grep -q 'audio.position = "\[ FL, FR, RL, RR \]"' && ok "Speaker sink FL FR (woofers) RL RR (tweeters)" || fail "Speaker sink is not 4 channels FL FR RL RR (wpctl inspect ${sink:-ID})"
 if [[ "${1:-}" == "--live" ]]; then
-    echo "live (2 s tone, muted): stream must reach the ALSA sink through matebook_speakers"
+    echo "live (2 s tone, muted): an app's stream must go straight into Speaker"
     was_muted=0
     if [[ -n $sink ]]; then
         wpctl get-volume "$sink" | grep -q MUTED && was_muted=1
         wpctl set-mute "$sink" 1
     fi
-    timeout 6 gst-launch-1.0 -q audiotestsrc num-buffers=100 volume=0.02 ! audioconvert ! pipewiresink 2>/dev/null &
+    timeout 6 gst-launch-1.0 -q audiotestsrc num-buffers=100 volume=0.02 ! audioconvert ! \
+        pipewiresink stream-properties="props,node.name=verify-tone" 2>/dev/null &
     sleep 1.5
     if pw-dump 2>/dev/null | python3 -c '
 import json,sys
 d=json.load(sys.stdin); n={o["id"]:o["info"]["props"].get("node.name","") for o in d if o["type"].endswith("Node")}
 links=[(n.get(o["info"]["output-node-id"],""), n.get(o["info"]["input-node-id"],"")) for o in d if o["type"].endswith("Link")]
-ok_in  = any(b=="matebook_speakers" and "matebook" not in a for a,b in links)
-ok_out = sum(a=="matebook_speakers.out" and "HiFi__Speaker__sink" in b for a,b in links) == 4
-sys.exit(0 if ok_in and ok_out else 1)'; then ok "audio flows app -> DSP -> Speaker, 4 channels"; else fail "DSP not in the path in 4 channels (wpctl status; pw-dump links)"; fi
+sys.exit(0 if any(a=="verify-tone" and b.endswith("HiFi__Speaker__sink") for a,b in links) else 1)'; then ok "audio flows app -> Speaker (the DSP runs inside it)"; else fail "the test stream did not reach Speaker (wpctl status; pw-dump links)"; fi
     wait
     [[ -n $sink ]] && wpctl set-mute "$sink" "$was_muted"
 fi

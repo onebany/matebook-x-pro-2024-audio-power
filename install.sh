@@ -4,7 +4,7 @@
 #   power  — CPU limits for the barely ramping fan, intel-lpmd (the iGPU stays on i915)
 #   audio  — SOF topology with the speakers in 4 channels, UCM, ALSA levels, WirePlumber rule
 #   amps   — the FS2119 speaker amps as Windows plays them, at boot and after every resume
-#   dsp    — PipeWire filter-chain sink "MateBook Speakers" (Windows' Histen + SmartPA sound)
+#   dsp    — the speaker DSP inside the "Speaker" output (Windows' Histen + SmartPA sound)
 #
 #   sudo ./install.sh              # everything
 #   sudo ./install.sh amps dsp     # any subset of: power audio amps dsp
@@ -119,27 +119,21 @@ stage_amps() {
 
 # ----------------------------------------------------------------------- dsp
 stage_dsp() {
-    log "PipeWire speaker DSP (Windows' Histen + SmartPA, swh LADSPA, LSP guard) as the sink \"MateBook Speakers\""
+    log "Speaker DSP (Windows' Histen + SmartPA, swh LADSPA, LSP guard) inside the \"Speaker\" output"
     apt-get install -y --no-install-recommends lsp-plugins-lv2 swh-plugins >/dev/null
     install -Dm644 "$CFG/60-matebook-speakers-dsp.conf" \
-        /etc/pipewire/pipewire.conf.d/60-matebook-speakers-dsp.conf
+        /etc/wireplumber/wireplumber.conf.d/60-matebook-speakers-dsp.conf
+    # earlier versions: a separate "MateBook Speakers" filter-chain sink
+    rm -f /etc/pipewire/pipewire.conf.d/60-matebook-speakers-dsp.conf
 }
 
-# After the restart. MateBook Speakers becomes the default output (its slider
-# acts inside the chain, after the dynamics), and the raw Speaker sink after it
-# goes to 100%.
+# After the restart: Speaker is the default output again (earlier versions made
+# their separate "MateBook Speakers" sink the default).
 dsp_default() {
     [[ -n $USER_NAME && -S /run/user/$USER_UID/bus ]] || return 0
-    local spk=""
-    for _ in {1..20}; do
-        spk="$(as_user wpctl status | grep -oE '[0-9]+\. Meteor Lake-P HD Audio Controller Speaker' | grep -oE '^[0-9]+' || true)"
-        [[ -n $spk ]] && break
-        sleep 0.5
-    done
-    [[ -n $spk ]] || { echo "    !! no Speaker sink in the session yet: run '$0 dsp' again after login"; return 0; }
-    log "Default output: MateBook Speakers; raw Speaker sink at 100%"
-    as_user wpctl set-volume "$spk" 1
-    as_user pw-metadata 0 default.configured.audio.sink '{ "name": "matebook_speakers" }' Spa:String:JSON >/dev/null
+    log "Default output: Speaker"
+    as_user pw-metadata 0 default.configured.audio.sink \
+        '{ "name": "alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Speaker__sink" }' Spa:String:JSON >/dev/null
 }
 
 main() {
@@ -157,8 +151,7 @@ main() {
     cat <<EOF
 
 Done. After a reboot run (as your user):  $HERE/verify.sh --live
-Output device in GNOME Sound: "MateBook Speakers" (the DSP). "Speaker" next to
-it is the raw sink without the DSP; leave it at 100%.
+Output device in GNOME Sound: "Speaker", with the DSP inside; its slider is the volume.
 EOF
 }
 

@@ -39,13 +39,20 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 | ALSA | `Speaker` (DAC 0x23, woofers) and `Bass Speaker` (DAC 0x22, tweeters, despite the name) at 100%, stored in `asound.state` | tweeter/woofer balance |
 | WirePlumber | `api.alsa.soft-mixer = true` | PipeWire never moves the hardware controls, so the balance cannot drift with the volume slider or a WirePlumber restart |
 | Amps | `matebook-amps.service` → `amps.py algo` at boot and after every resume: the three FourSemi FS2119 amps (ACPI `HWSP0001`, I2C) get the registers Windows' MultiPADriver writes when it plays | the BIOS leaves the tweeter amp 21-29 dB down |
-| PipeWire | filter-chain sink **MateBook Speakers**, the default output, feeding the Speaker sink in 4 channels: Huawei Histen (EQ, 3-band compressor, limiter) → the sink volume → SmartPA crossover (woofers FL FR below 3.2 kHz, tweeters RL RR above 3 kHz) → a power guard per speaker group | the sound of Windows with "Audio enhancements" on |
+| WirePlumber | a graph inside the **Speaker** output itself (`monitor.alsa.rules`: the ALSA node's `audioconvert.filter-graph.0`): Huawei Histen (EQ, 3-band compressor, limiter) → the Speaker volume → SmartPA crossover (woofers FL FR below 3.2 kHz, tweeters RL RR above 3 kHz) → a power guard per speaker group | the sound of Windows with "Audio enhancements" on |
 
-GNOME shows two outputs: **MateBook Speakers** (the DSP, default) and the raw
-**Speaker** sink without it, which stays at 100% (`verify.sh` checks both;
-`install.sh dsp` sets them). The MateBook Speakers slider acts inside the
-chain, after the Histen dynamics, as the Windows volume does: the sound keeps
-its character at every volume. Bluetooth or USB outputs are untouched.
+GNOME shows one output, **Speaker**, with the DSP inside. Its slider acts in
+the graph, after the Histen dynamics, as the Windows volume does: the sound
+keeps its character at every volume. Bluetooth, USB and HDMI are untouched.
+The graph takes FL FR; what PipeWire upmixes onto RL RR is ignored, so the
+rear channels of 5.1 content are dropped.
+
+Earlier versions made the DSP a separate "MateBook Speakers" filter-chain
+sink aimed at Speaker. WirePlumber destroys such a sink whenever Speaker is
+briefly gone (the card coming up after boot, a profile switch), and the DSP
+stayed gone until PipeWire restarted. The graph cannot go through
+`node.filter-graph.rules` either: that path sets it as a runtime parameter,
+which PipeWire 1.6 cuts at 4 KB, and this graph is 56 KB.
 
 The chain is the approximation a Windows agent fitted to WASAPI loopback
 captures of a test file (Histen set SMART_ONE, which Windows uses below 53 %
@@ -54,16 +61,16 @@ Through it the same file lands within 0.3-2 dB per third octave of Windows'
 own loopback on every level from -45 to -15 dBFS. Its LADSPA compressors and
 limiter come from `swh-plugins`.
 
-`./dsp-check.py` loads the chain into a private pipewire client (virtual sink
-→ chain → virtual 4-channel source, never the speakers) and checks the
+`./dsp-check.py` runs the graph the way Speaker does, in a stream's
+audioconvert with Speaker's four channels (a private loopback feeds
+`pw-record` carrying the graph, never the speakers), and checks the
 crossover (no bass on the tweeters), clipping, the guard, that a dense master
 stays under the guard and that the slider acts after the dynamics; about
 1 min, needs `python3-numpy`. Run it after any change to
 `configs/60-matebook-speakers-dsp.conf`, then `sudo ./install.sh dsp`.
 
 `./mic-sweep.py` (out loud, ~9 s; pause the music) plays pink noise at full
-volume through MateBook Speakers, or with `--raw` straight into the Speaker
-sink, records the built-in mics and prints the response per 1/3 octave next to
+volume into Speaker, records the built-in mics and prints the response per 1/3 octave next to
 Notebookcheck's Windows measurement of this laptop. Trust 125 Hz-4 kHz only:
 the mics in the lid hear the tweeters off-axis.
 

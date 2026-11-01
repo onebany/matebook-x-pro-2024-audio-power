@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Speaker response in the room through the built-in mic array. PLAYS OUT LOUD (~9 s).
 
-  ./mic-sweep.py          # through MateBook Speakers (the DSP), pink noise -20 dBFS RMS
-  ./mic-sweep.py --raw    # straight into the Speaker sink, without the DSP
+  ./mic-sweep.py          # into Speaker (the DSP runs inside it), pink noise -20 dBFS RMS
 
 Pause the music first. Mono pink noise goes out at full volume (the sink is set
 to 1.0 for the take) and the four DMICs are recorded, with the SOF capture DRC
@@ -136,7 +135,7 @@ def response(x, y, n=8192):
 
 
 def main():
-    sink = SPEAKER if "--raw" in sys.argv[1:] else "matebook_speakers"
+    sink = SPEAKER
     x = pink(8 * FS, -20)
     h, coh = response(x, take(sink, x))
     h -= h[REF].mean()

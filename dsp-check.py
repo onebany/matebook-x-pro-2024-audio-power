@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Check the speaker DSP through PipeWire, silently.
 
-Loads the filter-chain from configs/60-matebook-speakers-dsp.conf into a
-private pipewire client (virtual sink -> chain -> virtual 4-channel source;
-the speakers are never touched), plays test signals through it and checks:
+Takes the graph from configs/60-matebook-speakers-dsp.conf (the WirePlumber
+rule that puts it inside the Speaker output) and runs it the way Speaker does,
+in a stream's audioconvert with Speaker's 4 channels: a private loopback
+(virtual 4-channel sink -> virtual source) feeds pw-record, which carries the
+graph. The speakers are never touched. Plays test signals and checks:
 
   crossover  the tweeters (RL RR) get no bass
   safety     a loud master does not clip any output
@@ -11,7 +13,7 @@ the speakers are never touched), plays test signals through it and checks:
              bound: what a full-scale sine gets in the amps' INBOX mode
              (amps.py runs them in ALGO, +8.8 dB woofers, +8.2 dB tweeters)
   music      a dense master stays under the guard (the Histen dynamics hold it)
-  volume     the sink slider acts after the dynamics, cubic like GNOME
+  volume     the Speaker slider acts after the dynamics, cubic like GNOME
 
   ./dsp-check.py [conf]        # about 1 min; exit 1 if a check fails
 """
@@ -29,29 +31,35 @@ import numpy as np
 FS = 48000
 HERE = os.path.dirname(os.path.abspath(__file__))
 BOUND = {"woofers": -3 - 8.8, "tweeters": -3 - 8.2}     # dBFS RMS on the chain outputs, the guards' thresholds
-HEADER = """context.properties = { log.level = 0 }
+# state.restore-props: WirePlumber would otherwise restore a volume once set on these nodes
+LOOP = """context.properties = { log.level = 0 }
 context.spa-libs = { audio.convert.* = audioconvert/libspa-audioconvert  support.* = support/libspa-support }
 context.modules = [
   { name = libpipewire-module-protocol-native }
   { name = libpipewire-module-client-node }
   { name = libpipewire-module-adapter }
+  { name = libpipewire-module-loopback
+    args = {
+      node.description = "dsp-check"
+      audio.position = [ FL FR RL RR ]
+      capture.props = { node.name = "dsptest.in" media.class = Audio/Sink priority.session = 0 state.restore-props = false }
+      playback.props = { node.name = "dsptest.out" media.class = Audio/Source priority.session = 0 state.restore-props = false }
+    }
+  }
+]
 """
 
 
 def test_conf(path):
-    """The repo filter-chain, renamed and cut loose from the speakers."""
+    """The graph the repo's rule gives Speaker (audioconvert.filter-graph.0), as WirePlumber hands it over."""
     src = open(path).read()
-    body = src[src.index("[", src.index("context.modules")) + 1:src.rindex("]")]
-    # filter.smart: older configs from git would wedge the test into the real speaker path
-    drop = ("filter.smart", "node.passive", "priority.session", "target.object", "node.dont-fallback")
-    body = "\n".join(l for l in body.splitlines() if not any(k in l for k in drop))
-    body = body.replace('"MateBook Speakers"', '"dsp-check"')
-    # state.restore-props: WirePlumber would otherwise restore a volume once set on
-    # these nodes (it keys them by media.name) and the chain would run underdriven
-    body = body.replace('"matebook_speakers.out"', '"dsptest.out"  media.class = Audio/Source'
-                        '  priority.session = 0  state.restore-props = false')
-    body = body.replace('"matebook_speakers"', '"dsptest.in"  priority.session = 0  state.restore-props = false')
-    return HEADER + body + "]\n"
+    i = j = src.index("{", src.index("audioconvert.filter-graph.0 ="))
+    depth = 0
+    while True:
+        depth += {"{": 1, "}": -1}.get(src[j], 0)
+        j += 1
+        if depth == 0:
+            return src[i:j]
 
 
 def write_wav(path, x):
@@ -70,11 +78,11 @@ def read_wav(path, ch=4):
     return np.frombuffer(d[:len(d) // (4 * ch) * 4 * ch], "<f4").reshape(-1, ch).astype(float)
 
 
-def render(conf_text, takes):
-    """takes: (stereo signal, sink volume as wpctl/GNOME show it); returns FL FR RL RR per take."""
+def render(graph, takes):
+    """takes: (stereo signal, Speaker volume as wpctl/GNOME show it); returns FL FR RL RR per take."""
     with tempfile.TemporaryDirectory() as d:
         conf = os.path.join(d, "dsp-check.conf")
-        open(conf, "w").write(conf_text)
+        open(conf, "w").write(LOOP)
         pw = subprocess.Popen(["pipewire", "-c", conf], stderr=subprocess.DEVNULL)
         try:
             for _ in range(50):
@@ -85,20 +93,24 @@ def render(conf_text, takes):
                     break
                 time.sleep(0.2)
             else:
-                sys.exit("dsp-check: filter-chain did not start (pipewire -c dsp-check.conf)")
+                sys.exit("dsp-check: loopback did not start (pipewire -c dsp-check.conf)")
             outs = []
             for i, (x, vol) in enumerate(takes):
                 src, dst = f"{d}/in{i}.wav", f"{d}/out{i}.wav"
                 write_wav(src, x)
-                subprocess.run(["wpctl", "set-volume", str(ids["dsptest.in"]), str(vol)], check=True)
+                # --volume is linear: the cube of the slider, as GNOME sets Speaker's channelVolumes
                 rec = subprocess.Popen(["pw-record", "--target", "dsptest.out", "--format", "f32",
-                                        "--rate", str(FS), "--channels", "4", dst],
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                        "--rate", str(FS), "--channels", "4", "--channel-map", "FL,FR,RL,RR",
+                                        "--volume", str(vol ** 3), "-P",
+                                        "{ state.restore-props = false audioconvert.filter-graph.0 = " + graph + " }",
+                                        dst], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 time.sleep(0.5)
                 subprocess.run(["pw-play", "--target", "dsptest.in", src], check=True)
                 time.sleep(0.5)
                 rec.send_signal(signal.SIGINT)
                 rec.wait(5)
+                if not os.path.exists(dst):
+                    sys.exit("dsp-check: pw-record wrote nothing, the graph did not load (journalctl --user -u pipewire)")
                 outs.append(read_wav(dst))
             return outs
         finally:
