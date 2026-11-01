@@ -24,14 +24,6 @@ To update: `git -C matebook-x-pro-2024-audio-power pull && sudo ./matebook-x-pro
 - The DSP reproduces Windows with Huawei's "Audio enhancements" on and runs inside the "Speaker" output. 100 % is about as loud as 100 % on Windows; above that the sound clips.
 - At boot and after every resume a service sets the amps to the mode Windows plays in. Windows protects the speakers there with Huawei's SmartPA; here a power limiter in the DSP does. 8–9 dB quieter, the mode Windows uses without Huawei's processing: `echo MODE=inbox | sudo tee /etc/default/matebook-amps && sudo systemctl start matebook-amps`.
 
-## Camera, fingerprint / Камера, отпечаток
-
-[matebook-x-pro-2024-camera](https://github.com/onebany/matebook-x-pro-2024-camera), [matebook-x-pro-2024-fingerprint](https://github.com/onebany/matebook-x-pro-2024-fingerprint). All three / все три:
-
-```bash
-sudo apt install -y git && for r in camera fingerprint audio-power; do git clone https://github.com/onebany/matebook-x-pro-2024-$r && sudo ./matebook-x-pro-2024-$r/install.sh || break; done
-```
-
 ## License / Лицензия
 
 MIT; `topology/spk4.patch` and `configs/sof-hda-generic-ace1-4ch-spk4.tplg`: BSD-3-Clause (SOF topology sources).
