@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
 #
-# Huawei MateBook X Pro 2024 on Ubuntu 26.04:
-#   power  — CPU limits for the barely ramping fan, intel-lpmd (the iGPU stays on i915)
+# Huawei MateBook X Pro 2024 speakers on Ubuntu 26.04:
 #   audio  — SOF topology with the speakers in 4 channels, UCM, ALSA levels, WirePlumber rule
 #   amps   — the FS2119 speaker amps as Windows plays them, at boot and after every resume
 #   dsp    — the speaker DSP inside the "Speaker" output (Windows' Histen + SmartPA sound)
 #
 #   sudo ./install.sh              # everything
-#   sudo ./install.sh amps dsp     # any subset of: power audio amps dsp
+#   sudo ./install.sh amps dsp     # any subset of: audio amps dsp
 #
 # Re-runnable. Reboot once after the first run (SOF topology and modprobe options).
 set -euo pipefail
 
 [[ $EUID -eq 0 ]] || { echo "run as root: sudo $0" >&2; exit 1; }
-# The topology, CPU limits and amp scenes are for this one model; nothing changes on any other.
+# The topology and amp scenes are for this one model; nothing changes on any other.
 MODEL="$(cat /sys/class/dmi/id/sys_vendor) $(cat /sys/class/dmi/id/product_name)"
 [[ $MODEL == "HUAWEI VGHH-XX" ]] || { echo "only for the Huawei MateBook X Pro 2024 (VGHH-XX), this is $MODEL" >&2; exit 1; }
 
@@ -33,27 +32,6 @@ as_user() {
         "$@" 2>/dev/null || true
 }
 user_systemctl() { as_user systemctl --user "$@"; }
-
-# --------------------------------------------------------------------- power
-stage_power() {
-    log "CPU limits (the EC fan barely ramps on Linux): every core at most 3.2 GHz, RAPL PL1 18 W / PL2 30 W"
-    install -m644 "$CFG/matebook-cpu-limits.service" /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl enable -q matebook-cpu-limits.service
-    systemctl restart matebook-cpu-limits.service
-
-    log "intel-lpmd with Intel's Meteor Lake profile (intel_lpmd_config_F6_M170.xml)"
-    apt-get install -y --no-install-recommends intel-lpmd >/dev/null
-    # lpmd reads the per-CPU-model file before the generic intel_lpmd_config.xml,
-    # so an edited generic file is never used here. Older versions of this repo
-    # overwrote that conffile anyway: put the packaged one back.
-    if [[ "$(dpkg --verify intel-lpmd 2>/dev/null || true)" == *" /etc/intel_lpmd/intel_lpmd_config.xml"* ]]; then
-        rm -f /etc/intel_lpmd/intel_lpmd_config.xml
-        apt-get install -y --reinstall -o Dpkg::Options::=--force-confmiss intel-lpmd >/dev/null
-    fi
-    systemctl enable -q intel_lpmd
-    systemctl restart intel_lpmd
-}
 
 # --------------------------------------------------------------------- audio
 stage_audio() {
@@ -141,11 +119,11 @@ dsp_default() {
 
 main() {
     local stages=("$@")
-    [[ ${#stages[@]} -eq 0 ]] && stages=(power audio amps dsp)
+    [[ ${#stages[@]} -eq 0 ]] && stages=(audio amps dsp)
     for s in "${stages[@]}"; do
         case "$s" in
-            power|audio|amps|dsp) "stage_$s" ;;
-            *) echo "unknown stage '$s' (power audio amps dsp)" >&2; exit 1 ;;
+            audio|amps|dsp) "stage_$s" ;;
+            *) echo "unknown stage '$s' (audio amps dsp)" >&2; exit 1 ;;
         esac
     done
     log "Restarting the desktop user's PipeWire session"

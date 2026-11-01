@@ -1,4 +1,4 @@
-# Huawei MateBook X Pro 2024 on Ubuntu: audio and power
+# Huawei MateBook X Pro 2024 on Ubuntu: audio
 
 ```bash
 sudo apt install -y git && git clone https://github.com/onebany/matebook-x-pro-2024-audio-power && sudo ./matebook-x-pro-2024-audio-power/install.sh
@@ -13,7 +13,6 @@ sudo apt install -y git && git clone https://github.com/onebany/matebook-x-pro-2
 - Динамики в четырёх каналах, как в Windows: вуферы играют бас и середину, твитеры верх.
 - Обработка повторяет звук Windows с включёнными «улучшениями» Huawei и работает прямо в выходе «Speaker». 100 % звучит примерно как 100 % в Windows, выше звук обрезается.
 - При загрузке и после сна служба включает усилителям режим, в котором играет Windows. Там динамики бережёт SmartPA Huawei, здесь ограничитель мощности в обработке. Режим на 8–9 дБ тише, как в Windows без обработки Huawei: `echo MODE=inbox | sudo tee /etc/default/matebook-amps && sudo systemctl start matebook-amps`.
-- Частота процессора не выше 3,2 ГГц: Linux не управляет вентилятором, и без ограничения ядра греются до 100 °C. Плюс intel-lpmd.
 
 ## English
 
@@ -24,7 +23,6 @@ To update: `git -C matebook-x-pro-2024-audio-power pull && sudo ./matebook-x-pro
 - Speakers in four channels, as on Windows: the woofers play bass and mids, the tweeters the highs.
 - The DSP reproduces Windows with Huawei's "Audio enhancements" on and runs inside the "Speaker" output. 100 % is about as loud as 100 % on Windows; above that the sound clips.
 - At boot and after every resume a service sets the amps to the mode Windows plays in. Windows protects the speakers there with Huawei's SmartPA; here a power limiter in the DSP does. 8–9 dB quieter, the mode Windows uses without Huawei's processing: `echo MODE=inbox | sudo tee /etc/default/matebook-amps && sudo systemctl start matebook-amps`.
-- The CPU runs at 3.2 GHz at most: Linux cannot drive the fan, and uncapped cores sit at 100 °C. Plus intel-lpmd.
 
 ## Camera, fingerprint / Камера, отпечаток
 
@@ -37,4 +35,4 @@ sudo apt install -y git && for r in camera fingerprint audio-power; do git clone
 ## License / Лицензия
 
 MIT; `topology/spk4.patch` and `configs/sof-hda-generic-ace1-4ch-spk4.tplg`: BSD-3-Clause (SOF topology sources).
-Based on / на основе: [Arch BBS #298027](https://bbs.archlinux.org/viewtopic.php?id=298027), [alsa-ucm-conf PR #410](https://github.com/alsa-project/alsa-ucm-conf/pull/410), [daichendt.one](https://daichendt.one/blog/huawei-matebook-x-pro-2024/).
+Based on / на основе: [Arch BBS #298027](https://bbs.archlinux.org/viewtopic.php?id=298027), [alsa-ucm-conf PR #410](https://github.com/alsa-project/alsa-ucm-conf/pull/410).
